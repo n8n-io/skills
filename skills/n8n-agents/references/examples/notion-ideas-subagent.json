@@ -1,0 +1,197 @@
+{
+  "name": "Notion ideas sub-agent (example)",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            { "name": "chatInput" }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [-240, 0],
+      "id": "5f8c74d8-772d-4b5d-805a-729fb7538e22",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('When Executed by Another Workflow').item.json.chatInput }}",
+        "options": {
+          "systemMessage": "=You are an idea database assistant. You help query and create entries in a Notion ideas database.\n\n## Tools available\n- Get All Active Ideas: status Idea or Considering\n- Get All Inactive Ideas: Rejected, Cancelled, or Converted to project\n- Create Idea: adds a new idea (always enters as status 'Idea')\n\n## Database schema\n{{ $('Get a database').first().json.properties.toJsonString() }}\n\n## Creating ideas\nUse exact field names from the schema. Required: Title, Estimated days of work (whole number only), Goal (must match an existing option), Type (must match), Company resources needed (must match), Description (plain text body, can be empty).\n\n## Rules\n1. You must always respond in chat\n2. Always return the Notion URL for any page you create or reference\n3. If information is missing, list exactly what is needed and remind the caller you are stateless: they must resend the complete request with all details\n4. Match select / multi-select values exactly to existing options",
+          "maxIterations": 15
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [208, 0],
+      "id": "d6bd2513-b9af-45c0-883d-cc1c6f1325ea",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-haiku-4.6",
+        "options": { "temperature": 0.1 }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [112, 256],
+      "id": "bae4cbd8-63b8-4233-a27c-b8b8c92d52c8",
+      "name": "Sub-agent LLM (Claude Haiku 4.6, cheaper than router)",
+      "credentials": {
+        "openRouterApi": { "id": "exampleOpenRouterCredId", "name": "OpenRouter" }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Returns all ideas that have not been canceled, rejected, or started.",
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "00000000-0000-4000-8000-000000000000",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            { "key": "Status|status", "condition": "does_not_equal", "statusValue": "Rejected" },
+            { "key": "Status|status", "condition": "does_not_equal", "statusValue": "Cancelled" },
+            { "key": "Status|status", "condition": "does_not_equal", "statusValue": "Converted to project" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notionTool",
+      "typeVersion": 2.2,
+      "position": [304, 256],
+      "id": "040fa5e3-a5b7-49d3-92c4-a7882a23d487",
+      "name": "Get All Active Ideas",
+      "credentials": {
+        "notionApi": { "id": "exampleNotionCredId", "name": "Notion" }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Returns all ideas that have been canceled, rejected, or turned into projects.",
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "00000000-0000-4000-8000-000000000000",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            { "key": "Status|status", "condition": "does_not_equal", "statusValue": "Idea" },
+            { "key": "Status|status", "condition": "does_not_equal", "statusValue": "Considering" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notionTool",
+      "typeVersion": 2.2,
+      "position": [480, 256],
+      "id": "0b5f7d52-1092-4338-9971-18274b912ace",
+      "name": "Get All Inactive Ideas",
+      "credentials": {
+        "notionApi": { "id": "exampleNotionCredId", "name": "Notion" }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Creates an idea entry. Always enters as status 'Idea'.",
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "00000000-0000-4000-8000-000000000000",
+          "mode": "id"
+        },
+        "title": "={{ $fromAI('Title', 'Short title description of the idea', 'string') }}",
+        "propertiesUi": {
+          "propertyValues": [
+            { "key": "Status|status", "statusValue": "Idea" },
+            { "key": "Estimated days of work|number", "numberValue": "={{ $fromAI('estimatedDays', 'Whole integer; no decimals', 'number') }}" },
+            { "key": "Goal|multi_select", "multiSelectValue": "={{ $fromAI('goal', 'Goal. Must EXACTLY match one of the schema options', 'string') }}" },
+            { "key": "Type|select", "selectValue": "={{ $fromAI('type', 'Type column. Must EXACTLY match one of the schema options', 'string') }}" },
+            { "key": "Company resources needed|select", "selectValue": "={{ $fromAI('companyResourcesNeeded', 'Must EXACTLY match one of the schema options', 'string') }}" }
+          ]
+        },
+        "blockUi": {
+          "blockValues": [
+            { "textContent": "={{ $fromAI('description', 'Longer idea description in plain text. If not needed, pass empty string', 'string') }}" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notionTool",
+      "typeVersion": 2.2,
+      "position": [672, 256],
+      "id": "cb786155-83f2-4c38-8fbd-485394198aaf",
+      "name": "Create Idea",
+      "credentials": {
+        "notionApi": { "id": "exampleNotionCredId", "name": "Notion" }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "databaseId": {
+          "__rl": true,
+          "value": "00000000-0000-4000-8000-000000000000",
+          "mode": "id"
+        },
+        "simple": false
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [-32, 0],
+      "id": "8258d42f-f6dc-4737-a657-4b73d1e44ade",
+      "name": "Get a database",
+      "credentials": {
+        "notionApi": { "id": "exampleNotionCredId", "name": "Notion" }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Fresh schema injection: Get the database before the agent each call, then template properties into the system prompt. Sub-agent never operates on a stale schema.",
+        "height": 200,
+        "width": 360
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [-80, -200],
+      "typeVersion": 1,
+      "id": "22222222-3333-4444-5555-666666666666",
+      "name": "Sticky: fresh schema injection"
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [[{ "node": "Get a database", "type": "main", "index": 0 }]]
+    },
+    "Sub-agent LLM (Claude Haiku 4.6, cheaper than router)": {
+      "ai_languageModel": [[{ "node": "AI Agent", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Get All Active Ideas": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "Get All Inactive Ideas": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "Create Idea": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "Get a database": {
+      "main": [[{ "node": "AI Agent", "type": "main", "index": 0 }]]
+    }
+  }
+}
