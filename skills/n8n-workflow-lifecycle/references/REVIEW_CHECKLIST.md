@@ -56,7 +56,7 @@ Before walking the per-domain list:
 
 ### Chat-triggered agents (Slack / Discord / Teams / Telegram)
 
-- [ ] **Bot's own user ID not filtered out** as the first node after the trigger. The bot's reply re-triggers the workflow → infinite loop. → [CHAT_AGENT_PATTERNS.md](../../n8n-agents/references/CHAT_AGENT_PATTERNS.md)
+- [ ] **Bot's own user ID not filtered out**, either via the trigger's own filter option (preferred: Slack's `options.userIds` exclusion list) or as the first node after the trigger. The bot's reply re-triggers the workflow → infinite loop. Watch out for surface-specific semantics: Telegram's `userIds` is an allowlist, not an exclusion list. → [CHAT_AGENT_PATTERNS.md](../../n8n-agents/references/CHAT_AGENT_PATTERNS.md)
 
 ### ChatHub agents
 

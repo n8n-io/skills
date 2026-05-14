@@ -9,7 +9,8 @@
         ],
         "watchWorkspace": true,
         "options": {
-          "resolveIds": false
+          "resolveIds": false,
+          "userIds": "={{ [\"U00000000BOT\"] }}"
         }
       },
       "type": "n8n-nodes-base.slackTrigger",
@@ -21,28 +22,6 @@
       "credentials": {
         "slackApi": { "id": "exampleSlackCredId", "name": "Slack" }
       }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
-          "conditions": [
-            {
-              "id": "1dc40e84-4e05-4c95-9924-fb6e6c54f5fd",
-              "leftValue": "={{ $json.user }}",
-              "rightValue": "U00000000BOT",
-              "operator": { "type": "string", "operation": "notEquals" }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.filter",
-      "typeVersion": 2.3,
-      "position": [-80, 48],
-      "id": "46e73270-d5d9-4755-b9e7-5dfde3a2109a",
-      "name": "Filter Out Bot Responses"
     },
     {
       "parameters": {
@@ -140,8 +119,8 @@
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
-            "chatInput": "={{ $('Filter Out Bot Responses').item.json.text }}",
-            "threadId": "={{ $('Filter Out Bot Responses').item.json.thread_ts || $('Filter Out Bot Responses').item.json.ts }}"
+            "chatInput": "={{ $('Slack Trigger').item.json.text }}",
+            "threadId": "={{ $('Slack Trigger').item.json.thread_ts || $('Slack Trigger').item.json.ts }}"
           },
           "matchingColumns": [],
           "schema": [
@@ -168,7 +147,7 @@
         "select": "user",
         "user": { "__rl": true, "value": "={{ $('Slack Trigger').item.json.user }}", "mode": "id" },
         "messageType": "block",
-        "blocksUi": "={ \"blocks\":{{ $('Call \\'Agent core\\'').item.json.output.blocks.toJsonString() }} }",
+        "blocksUi": "={{ { \"blocks\": $('Call \\'Agent core\\'').item.json.output.blocks } }}",
         "otherOptions": {
           "includeLinkToWorkflow": false,
           "thread_ts": {
@@ -242,11 +221,12 @@
     },
     {
       "parameters": {
-        "content": "Anti-loop filter. Without this, the bot's own messages re-trigger the workflow.",
-        "height": 336
+        "content": "### Anti-loop filter (trigger-level)\n\nThe Slack Trigger's `options.userIds` is an **exclusion list**: events from any user in the list are dropped before the workflow runs. Put the bot's own user ID here so the bot's replies don't re-trigger the workflow.\n\nWhen the trigger handles the bot filter, no separate Filter node is needed downstream.",
+        "height": 336,
+        "width": 240
       },
       "type": "n8n-nodes-base.stickyNote",
-      "position": [-144, -128],
+      "position": [-336, -160],
       "typeVersion": 1,
       "id": "64b85d5f-f0bc-4793-b7a3-88b9b0430118",
       "name": "Sticky: anti-loop"
@@ -277,6 +257,18 @@
     },
     {
       "parameters": {
+        "content": "### Block Kit envelope, NOT a raw array\n\n`blocksUi` must be an object shaped `{ \"blocks\": [...] }`, where the value is a real array, not just the blocks array on its own.\n\nThe agent returns `{ text, blocks }`, so wrap in a single expression that returns the object (reference the upstream by name, not `$json`):\n\n`={{ { \"blocks\": $('Call \\'Agent core\\'').item.json.output.blocks } }}`\n\nPassing only the array (`={{ $('Call \\'Agent core\\'').item.json.output.blocks }}`) silently fails: the Slack node accepts the input, the message posts with no rich content, and there is no error.",
+        "height": 336,
+        "width": 280
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [1184, -560],
+      "typeVersion": 1,
+      "id": "7b1c2d3e-4f5a-4b6c-9d8e-1f2a3b4c5d6e",
+      "name": "Sticky: block kit envelope"
+    },
+    {
+      "parameters": {
         "select": "user",
         "user": { "__rl": true, "value": "={{ $('Slack Trigger').item.json.user }}", "mode": "id" },
         "text": "=There was a workflow error. https://<your-n8n-host>/workflow/<this-workflow-id>/executions/{{ $execution.id }}",
@@ -301,9 +293,6 @@
   ],
   "connections": {
     "Slack Trigger": {
-      "main": [[{ "node": "Filter Out Bot Responses", "type": "main", "index": 0 }]]
-    },
-    "Filter Out Bot Responses": {
       "main": [[{ "node": "Switch", "type": "main", "index": 0 }]]
     },
     "Switch": {

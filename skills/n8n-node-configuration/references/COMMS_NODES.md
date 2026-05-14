@@ -26,6 +26,16 @@ The display name and the internal value don't always match. "Send a message" →
 
 For rich messages, set `messageType: 'block'`. The block content is a JSON **string** (the JSON output from Slack's Block Kit Builder), not a nested n8n object. The `text` field becomes the fallback notification text.
 
+**`blocksUi` must be wrapped as `{ "blocks": [...] }`, not the bare array.** The Slack node accepts the bare array silently: the request goes through, but the rich content drops and the message posts as plain `text` (or empty if `text` isn't set). No node error, no validation warning. The wrap matches Slack's `chat.postMessage` payload shape; the node forwards it directly.
+
+Build the envelope as a single expression that returns a real object with the array as a live array value, not a stringified one. Reference the upstream by name (per `n8n-expressions` non-negotiable #1), not `$json`:
+
+```
+={{ { "blocks": $('Agent').item.json.output.blocks } }}
+```
+
+Don't reach for string-interpolation hybrids like `={ "blocks": {{ $('Agent').item.json.output.blocks.toJsonString() }} }`. They work in some n8n versions, but stringifying-then-reparsing is fragile (double-escaping, unicode, large payloads) where the object form just hands the node the structure directly.
+
 ### Threading: `thread_ts` is required for in-thread replies
 
 Without `thread_ts`, the "reply" posts as a top-level channel message. Inspect via `get_node_types` for where the field sits, it's not under `otherOptions` like older docs suggest.
