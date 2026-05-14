@@ -31,7 +31,7 @@ These rationalizations cause skills to be skipped. If you catch yourself thinkin
 | "I'll just use a Code node, it's easier" | Invoke `n8n-code-nodes`. The bar is high. Most reaches for Code can be expressions or Edit Fields with arrow functions. |
 | "Validation passed, I'm ready to publish" | Invoke `n8n-workflow-lifecycle` and walk `VALIDATION_CHECKLIST.md` section 2.5 (the antipattern scan). Validation passing is necessary, not sufficient. |
 | "The agent is wired up, the tool descriptions look fine" | Invoke `n8n-agents` `references/TOOLS.md`. Tool names and descriptions ARE part of the prompt, and "looks fine" usually means generic. |
-| "I'll set this sub-workflow trigger to passthrough" | Invoke `n8n-subworkflows`. Passthrough is only correct for binary-receiving sub-workflows that won't be agent tools. |
+| "I'll set this sub-workflow trigger to passthrough" | Invoke `n8n-subworkflows`. Passthrough is only correct for binary-receiving sub-workflows that won't be agent tools, or for sub-workflows that genuinely take no inputs (Define Below requires at least one field). |
 | "I'll use passthrough so binary works, then branch internally on which input shape arrived" | Invoke `n8n-subworkflows` `references/SUBWORKFLOW_PATTERNS.md` "Splitting by input shape". This is the signal to SPLIT into two outer sub-workflows (one Define Below, one passthrough) sharing a common downstream sub-workflow. Don't fight passthrough vs Define Below in one trigger. |
 | "I should ask the user what their credential is named" | Don't. The string in `newCredential('Label')` is cosmetic. See `n8n-credentials-and-security`. |
 | "The user mentioned data analysis, I'll write Python" | Invoke `n8n-code-nodes`. Default is JavaScript. Python only when explicitly asked. |

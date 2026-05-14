@@ -53,7 +53,7 @@ Before walking the per-domain list:
 
 ### Sub-workflow contracts
 
-- [ ] **`Execute Workflow Trigger` set to `passthrough` when it shouldn't be.** Passthrough loses the typed-input contract that agent tools (`fromAi()`) and structured callers need. Only correct when the sub-workflow specifically receives binary AND isn't an agent tool. → [n8n-subworkflows non-negotiables](../../n8n-subworkflows/SKILL.md) and [SUBWORKFLOW_PATTERNS.md "Splitting by input shape"](../../n8n-subworkflows/references/SUBWORKFLOW_PATTERNS.md)
+- [ ] **`Execute Workflow Trigger` set to `passthrough` when it shouldn't be.** Passthrough loses the typed-input contract that agent tools (`fromAi()`) and structured callers need. Only correct when (a) the sub-workflow specifically receives binary AND isn't an agent tool, or (b) the sub-workflow takes no inputs (Define Below requires at least one field). For (b), the body should open with a `Set` ("Keep Only Set", no fields) and the trigger should carry a sticky noting no inputs are expected. → [n8n-subworkflows non-negotiables](../../n8n-subworkflows/SKILL.md) and [SUBWORKFLOW_PATTERNS.md "Splitting by input shape"](../../n8n-subworkflows/references/SUBWORKFLOW_PATTERNS.md)
 
 ### Chat-triggered agents (Slack / Discord / Teams / Telegram)
 

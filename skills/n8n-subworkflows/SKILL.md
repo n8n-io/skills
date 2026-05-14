@@ -16,7 +16,7 @@ Without sub-workflows, the same logic gets duplicated across workflows. Bug fixe
 ## Non-negotiables
 
 1. **Search before you build.** Before writing logic that handles a generic problem, check if a sub-workflow already exists. Use `search_workflows({ query: 'Subworkflow' })`, `query: '<keyword>'`, etc. The MCP can't filter by tags, so naming is the discovery mechanism.
-2. **`Execute Workflow Trigger` uses "Define Below" with typed fields, not passthrough.** Define Below is the only mode that lets agent tools (`fromAi`) and structured callers pass values in. The single exception: passthrough is required when the sub-workflow specifically needs to receive binary, and that sub-workflow then can't be wired as an agent tool directly. See "Sub-workflow inputs and outputs" below.
+2. **`Execute Workflow Trigger` uses "Define Below" with typed fields, not passthrough.** Define Below is the only mode that lets agent tools (`fromAi`) and structured callers pass values in. Two exceptions: (a) the sub-workflow specifically needs to receive binary (then it can't be wired as an agent tool directly), or (b) the sub-workflow takes no inputs at all (Define Below requires at least one field). See "Sub-workflow inputs and outputs" below.
 
 ## Strong defaults
 
@@ -240,7 +240,7 @@ Each declared input becomes a typed parameter the caller can fill. Inside the wo
 
 Pick types deliberately (`string`, `number`, `boolean`, `array`, `object`). The model uses these as the required types when filling agent tool parameters, and humans rely on them when wiring callers.
 
-### The one exception: passthrough mode for binary
+### Exception 1: passthrough mode for binary
 
 If the sub-workflow needs to receive binary (image, file, PDF), `Define Below` doesn't work because typed fields are JSON only. Switch to passthrough:
 
@@ -258,6 +258,17 @@ const subTrigger = trigger({
 In passthrough mode, the sub-workflow receives the caller's items as-is, including the `binary` slot. Cost: no typed input schema, so agent tools can't pass parameters through `fromAi()`. Use this mode for sub-workflows called by other workflows (not agents) where binary needs to flow through.
 
 For sub-workflows that need binary AND are called by an agent, see `n8n-binary-and-data` `references/AGENT_TOOL_BINARY.md` (agent tools can't pass binary directly).
+
+### Exception 2: passthrough for sub-workflows with no inputs
+
+Define Below requires at least one declared field. A sub-workflow that genuinely takes no inputs (a "list active credentials" tool, a "current count" lookup, any zero-arg operation) has nowhere to put the empty schema, so passthrough is the only option.
+
+When using passthrough specifically for the no-input case:
+
+- **Start the body with a `Set` (Edit Fields) node in "Keep Only Set" mode with no fields.** This clears the caller's JSON so downstream nodes don't accidentally read fields from whatever shape the caller happened to pass. Without it, the body silently picks up whatever the caller forwarded.
+- **Add a sticky note on the trigger documenting that no inputs are expected.** Future readers (and the agent re-wiring this as a tool) need to know passthrough isn't here for binary, it's here because the schema is empty by design.
+
+Agent-tool wiring still works in the no-input case: `toolWorkflow` accepts a sub-workflow whose input mapping has no fields. The agent's only decision is whether to invoke. The pattern from `n8n-agents` `references/TOOLS.md` ("zero `fromAi` parameters") applies directly.
 
 ### Other conventions
 
@@ -299,7 +310,8 @@ For the polling-after-fire-and-forget pattern, see `references/SUBWORKFLOW_PATTE
 | Sub-workflow with no `description` | Won't be found in future searches, nobody knows what it does | Set `description` with input/output shape and purpose |
 | Sub-workflow named `Helper 3` | Name doesn't tell anyone what it does, and doesn't match any prefix-based search | Verb-first prefix name (`Subworkflow: ...`, `Customer: ...`), see `n8n-workflow-lifecycle` `NAMING_CONVENTIONS.md` |
 | Sub-workflow with no `Subworkflow:` / domain prefix | Won't show up under `query: 'Subworkflow'` or domain searches, future you can't find it | Always use a prefix at create time |
-| `Execute Workflow Trigger` set to `passthrough` when not handling binary | No typed schema means agent tools can't fill parameters via `fromAi`, structured callers can't pass values cleanly | Use "Define Below" with declared `workflowInputs.values` (name + type per field) |
+| `Execute Workflow Trigger` set to `passthrough` when not handling binary and not deliberately zero-input | No typed schema means agent tools can't fill parameters via `fromAi`, structured callers can't pass values cleanly | Use "Define Below" with declared `workflowInputs.values` (name + type per field). The exceptions are binary-receiving sub-workflows and sub-workflows that genuinely take no inputs (see "Exception 2") |
+| Passthrough trigger for a zero-input sub-workflow without a Set-to-clear node and explanatory sticky | Body silently reads stray fields from whatever the caller forwarded; future readers think passthrough is for binary | Add a `Set` ("Keep Only Set", no fields) at the top of the body and a sticky on the trigger noting no inputs are expected |
 | Sub-workflow called as an agent tool that expects binary input | Agent tools can't pass binary directly | See `n8n-binary-and-data` `AGENT_TOOL_BINARY.md` for the right pattern |
 | 30-node workflow with no extraction | Hard to read, hard to test, hard to replace | Extract logical sections into sub-workflows |
 
