@@ -38,6 +38,7 @@ These rationalizations cause skills to be skipped. If you catch yourself thinkin
 | "I'll add a Loop Over Items here to process each row" | Invoke `n8n-loops`. Default per-item iteration probably handles it without a Loop Over Items node. |
 | "Date math, I'll use a DateTime node" | Invoke `n8n-expressions`. DateTime nodes are almost always wrong. |
 | "I'll wrap this in a Merge with 3 sources" | Invoke `n8n-connections` `references/MERGE_INDEX_RULES.md`. Merge defaults to 2 inputs, and 3+ sources need `numberOfInputs` set explicitly. |
+| "I'll fan out these three slow steps to run in parallel" | Invoke `n8n-connections` `references/FAN_OUT_FAN_IN.md`. n8n executes fan-out branches sequentially (top-to-bottom by Y-position), not concurrently. For real concurrency use sub-workflows with `mode: 'each'` + `waitForSubWorkflow: false`. |
 | "User said which project, I'll just build it" | Invoke `n8n-workflow-lifecycle`. Project is not folder. Ask about folder placement BEFORE building. The MCP can't create folders, so if the requested folder doesn't exist, the user must create it in the UI first. |
 | "I'll just run `test_workflow` to see what happens" | Invoke `n8n-workflow-lifecycle` `references/TESTING.md`. `test_workflow` mocks the trigger only. Slack sends, DB writes, payments all fire for real. Ask the user first when downstreams have side effects. |
 

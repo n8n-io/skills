@@ -97,6 +97,10 @@ Before walking the per-domain list:
 - [ ] **`$env.X` referenced in any expression.** Doesn't work, throws at runtime. Replace with `$vars.X` (paid plans), a Data Table, or a credential for secrets. → [n8n-expressions anti-patterns](../../n8n-expressions/SKILL.md)
 - [ ] **Aggregate node + per-item execution mismatch.** Expressions using `$input.all()` / `$('Node').all()` *without* combining with another node's `.item` should set `executeOnce: true` on the node. → [n8n-loops non-negotiable](../../n8n-loops/SKILL.md) and [n8n-expressions ".all().map() triggers an executeOnce question"](../../n8n-expressions/SKILL.md)
 
+### Execution model
+
+- [ ] **Workflow assumes fan-out branches execute in parallel.** They don't, n8n runs them sequentially top-to-bottom by Y-position. Real concurrency needs sub-workflow dispatch with `mode: 'each'` + `waitForSubWorkflow: false`. → [FAN_OUT_FAN_IN.md](../../n8n-connections/references/FAN_OUT_FAN_IN.md)
+
 ### Loops
 
 - [ ] **`Loop Over Items` added "to make it loop"** when default per-item iteration handles it. Default per-item iteration already waits for each item before the next, so a Loop Over Items added "to wait for all items" is unnecessary. → [n8n-loops "When NOT to reach for Loop Over Items"](../../n8n-loops/SKILL.md)

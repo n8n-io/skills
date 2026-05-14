@@ -48,6 +48,9 @@ Walk the workflow with these questions in mind. These are patterns that recur ac
 - Count wires going in. Confirm `numberOfInputs` matches.
 - For Merges using `useDataOfInput`, walk through the off-by-one rule (`MERGE_INDEX_RULES.md`).
 
+**Fan-out branches:**
+- If the design assumes branches run in parallel, it's wrong. n8n runs them sequentially top-to-bottom by Y-position. For real concurrency, dispatch via `Execute Workflow` with `mode: 'each'` + `waitForSubWorkflow: false`.
+
 **DateTime nodes:**
 - Replace with a Luxon expression (see `n8n-expressions`). DateTime nodes are almost always wrong.
 

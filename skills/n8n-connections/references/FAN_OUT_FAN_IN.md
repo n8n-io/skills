@@ -6,6 +6,12 @@ One universal grammar covers both: `.add(source.output(n).to(target))`. The `.to
 
 Repeat `.add()` per wire.
 
+### Fan-out branches run sequentially, not in parallel
+
+Branches execute one at a time, top-to-bottom by Y-position (the order in `connections.<source>.main[0]`). Total runtime is the sum, not the max. Earlier branches' side effects are visible to later ones.
+
+For real concurrency, dispatch via `Execute Workflow` with `mode: 'each'` + `options.waitForSubWorkflow: false`. See `n8n-subworkflows` `references/SUBWORKFLOW_PATTERNS.md` "Fire-and-forget parallelization".
+
 ### Same output, multiple targets
 
 ```ts
