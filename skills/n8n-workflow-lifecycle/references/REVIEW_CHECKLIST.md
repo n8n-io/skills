@@ -100,6 +100,7 @@ Before walking the per-domain list:
 - [ ] **`Loop Over Items` added "to make it loop"** when default per-item iteration handles it. Default per-item iteration already waits for each item before the next, so a Loop Over Items added "to wait for all items" is unnecessary. → [n8n-loops "When NOT to reach for Loop Over Items"](../../n8n-loops/SKILL.md)
 - [ ] **Custom pagination implementation** (Loop Over Items + `$pageCount`, hand-rolled `while` in a Code node, Set + IF cycle, etc.) instead of HTTP Request's built-in `Pagination` option. → [HTTP_PAGINATION.md](../../n8n-loops/references/HTTP_PAGINATION.md)
 - [ ] **Reset-mode loop with no clear termination.** `reset: true` without an explicit stop condition + `$runIndex` ceiling = infinite loop, n8n eats memory until killed. → [LOOP_OVER_ITEMS.md "Reset mode"](../../n8n-loops/references/LOOP_OVER_ITEMS.md)
+- [ ] **One `Loop Over Items` nested inside another in the same workflow.** Doesn't work; breaks at runtime. Move the inner loop into a sub-workflow called per outer iteration (`mode: 'each'`). → [LOOP_OVER_ITEMS.md "Nesting Loop Over Items"](../../n8n-loops/references/LOOP_OVER_ITEMS.md)
 
 ### Self-healing on transient failures
 
