@@ -258,7 +258,7 @@ The outer `(` and trailing `)()` are mandatory: the first pair brackets the func
 
 **Why this over a Code node?** The Code node runs in a sandboxed VM: roughly 500-1000ms worst case. The expression IIFE runs in the same context as the surrounding expression: 1-10ms consistently. For pure single-item shaping, that's a 100x gap with no functional difference. This is a common poweruser method.
 
-A Code node still earns its place for multi-item aggregation (`$input.all()`), external libraries, async work, or `getWorkflowStaticData()`. See `n8n-code-nodes` for the decision tree, and `n8n-code-nodes` `ARROW_FUNCTIONS_IN_EDIT_FIELDS.md` for longer examples and formatting rules.
+A Code node still earns its place for multi-item aggregation (`$input.all()`), external libraries, or async work. See `n8n-code-nodes` for the decision tree, and `n8n-code-nodes` `ARROW_FUNCTIONS_IN_EDIT_FIELDS.md` for longer examples and formatting rules.
 
 ### Native JS available
 
@@ -410,5 +410,6 @@ When extra nodes ARE right:
 | `new Date($json.created_at)` instead of Luxon | Loses formatting/manipulation features | `DateTime.fromISO($('Source').item.json.created_at)` |
 | One-line expression that's actually 200 chars | Unreadable | Multi-line with arrow function, indented, with comments |
 | `$json.foo.bar.baz` without checking `$json.foo` exists | Crashes on missing intermediate | Use `?.` chain: `$('Source').item.json.foo?.bar?.baz` |
-| Hardcoding values in expressions that should be config | Magic strings | Use `$env.X` or workflow static data |
+| Hardcoding values in expressions that should be config | Magic strings | Use `$vars.X` (n8n Variables, paid plans) or a Data Table |
 | Branches converge with `$json` references downstream | Whichever branch fired last wins, non-deterministic | Insert a NoOp ("Combine Inputs") at the merge, reference by name |
+| Using `$env.X` in any expression | Doesn't work; throws at runtime | For config use `$vars.X` (paid plans) or a Data Table. For secrets use the credential system |

@@ -8,6 +8,12 @@ Entry and exit of webhook-shaped API workflows. Param shapes are version-depende
 
 Webhook paths are global within the n8n instance, not per-workflow. Two webhooks on the same path conflict and n8n typically rejects activation. Use UUIDs or descriptive paths (`/customer-events`, `/payment-webhook`).
 
+### Authentication: use the trigger's built-in auth, not hand-rolled checks
+
+Use `parameters.authentication` (`'basicAuth'` or `'headerAuth'`) with the matching credential type. n8n rejects mismatched callers with 401 before the workflow runs.
+
+Anti-pattern: `authentication: 'none'` plus an IF node comparing the `Authorization` header to a `$vars.token` or hardcoded string. Not encrypted, leaks in exports, no rotation. See `n8n-credentials-and-security`.
+
 ### `responseMode`: behavioral differences
 
 | Mode | Behavior |

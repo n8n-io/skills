@@ -207,7 +207,7 @@ When the domain schema can change at runtime (Notion DB property options evolve,
     {{ $('Get a database').first().json.properties.toJsonString() }}
 ```
 
-One extra API call per invocation, and in exchange the sub-agent never returns "that property doesn't exist" because the prompt is stale. Worth it for low-call-volume chat assistants. For high-volume hot paths, cache the schema in workflow static data with a TTL.
+One extra API call per invocation, and in exchange the sub-agent never returns "that property doesn't exist" because the prompt is stale. Worth it for low-call-volume chat assistants. For high-volume hot paths, cache the schema in a Data Table with a TTL.
 
 ## Worked example: a personal Slack assistant
 

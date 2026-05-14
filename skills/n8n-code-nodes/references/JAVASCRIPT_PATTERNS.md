@@ -142,19 +142,6 @@ return [{ json: { ...item, signature } }]
 
 (But: see `n8n-credentials-and-security`'s `CUSTOM_CREDENTIALS.md`. The secret should come from a credential, not be passed in input data.)
 
-### Reading workflow static data
-
-```ts
-const data = this.getWorkflowStaticData('node')
-const lastRun = data.lastRun || 0
-data.lastRun = Date.now()
-
-const items = $input.all()
-return items.filter(item => item.json.timestamp > lastRun)
-```
-
-(But: for anything you want to inspect or query later, prefer Data Tables. See `n8n-binary-and-data`'s `DATA_TABLES.md`.)
-
 ## Things to avoid
 
 ### `console.log` for "debugging"

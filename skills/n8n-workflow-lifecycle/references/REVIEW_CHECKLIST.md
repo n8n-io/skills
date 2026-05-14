@@ -33,6 +33,7 @@ Before walking the per-domain list:
 - [ ] **Tokens stored in Set node values** for later `{{$json.token}}` referencing. The token is in workflow JSON regardless of how it's read. → [n8n-credentials-and-security](../../n8n-credentials-and-security/SKILL.md)
 - [ ] **Hardcoded credentials in Code nodes.** Same leak surface as text fields. → [n8n-code-nodes anti-patterns](../../n8n-code-nodes/SKILL.md)
 - [ ] **HTTP Request nodes with `Authorization` header values typed in directly** instead of using a credential. For `Authorization: Bearer <token>`, use `Bearer Auth` (`httpBearerAuth`) so the token is stored without the prefix. For other custom auth headers, use `Header Auth` (`httpHeaderAuth`). → [HTTP_REQUEST_WITH_AUTH.md](../../n8n-credentials-and-security/references/HTTP_REQUEST_WITH_AUTH.md)
+- [ ] **Secret read from `$vars.X` and used as an auth value.** Use a credential instead. → [n8n-credentials-and-security](../../n8n-credentials-and-security/SKILL.md)
 
 ### SQL / query injection
 
@@ -48,7 +49,7 @@ Before walking the per-domain list:
 
 ### Webhook API workflows (Webhook + Respond to Webhook)
 
-- [ ] **Webhook performs a sensitive action with `parameters.authentication: 'none'`.** "Sensitive" = mutates state, sends external messages, hits production data, exposes private info, triggers paid actions. Anyone with the URL can fire it. Set `parameters.authentication` to `'basicAuth'`, `'headerAuth'`, or `'jwtAuth'` and use the matching credential. → [n8n-credentials-and-security](../../n8n-credentials-and-security/SKILL.md)
+- [ ] **Webhook performs a sensitive action with `parameters.authentication: 'none'`.** "Sensitive" = mutates state, sends external messages, hits production data, exposes private info, triggers paid actions. Anyone with the URL can fire it. Set `parameters.authentication` to `'basicAuth'` or `'headerAuth'` and use the matching credential. → [n8n-credentials-and-security](../../n8n-credentials-and-security/SKILL.md)
 
 ### Sub-workflow contracts
 
@@ -93,6 +94,7 @@ Before walking the per-domain list:
 
 - [ ] **`$json.x` references deep in workflows with branches/intermediates.** Switch to `$('Source Node').item.json.x` for refactor stability. → [n8n-expressions non-negotiable](../../n8n-expressions/SKILL.md)
 - [ ] **DateTime nodes used for date math/formatting.** Use Luxon expressions (`DateTime.fromISO(...)`) inline. → [n8n-expressions strong defaults](../../n8n-expressions/SKILL.md)
+- [ ] **`$env.X` referenced in any expression.** Doesn't work, throws at runtime. Replace with `$vars.X` (paid plans), a Data Table, or a credential for secrets. → [n8n-expressions anti-patterns](../../n8n-expressions/SKILL.md)
 - [ ] **Aggregate node + per-item execution mismatch.** Expressions using `$input.all()` / `$('Node').all()` *without* combining with another node's `.item` should set `executeOnce: true` on the node. → [n8n-loops non-negotiable](../../n8n-loops/SKILL.md) and [n8n-expressions ".all().map() triggers an executeOnce question"](../../n8n-expressions/SKILL.md)
 
 ### Loops

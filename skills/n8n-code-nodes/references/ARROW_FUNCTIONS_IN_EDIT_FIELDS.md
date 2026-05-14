@@ -39,7 +39,6 @@ Pretty much anything in plain JS:
 What you **can't** do:
 
 - `require()` external libs: Code-node-only.
-- `getWorkflowStaticData()`: Code-node-only.
 - `await`: expressions are synchronous.
 
 Edit Fields **can** call `$input.all()` and `$('Other Node').all()` though, and that's where this gets powerful: pair it with the **Execute Once** toggle on the node and you get one-shot cross-item aggregation without a Code node. See "Cross-item aggregation with Execute Once" below.

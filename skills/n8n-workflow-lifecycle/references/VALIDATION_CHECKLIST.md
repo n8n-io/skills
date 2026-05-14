@@ -56,6 +56,7 @@ Walk the workflow with these questions in mind. These are patterns that recur ac
 
 **Data references:**
 - Search for `$json.` in expressions. Replace with `$('Node Name').item.json.` unless the node is directly downstream of a single source with no intermediates (`n8n-expressions` non-negotiable #1).
+- Search for `$env.` in expressions. Doesn't work, throws at runtime. Replace with `$vars.X` (paid plans), a Data Table, or a credential if it's a secret.
 
 Skipping it is how build-time slips slip past validation.
 
