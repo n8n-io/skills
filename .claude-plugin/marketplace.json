@@ -9,7 +9,7 @@
       "name": "n8n-skills",
       "source": "./",
       "description": "Production-grade n8n workflow building skills for Claude Code. Pairs with the official n8n MCP server.",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "category": "automation",
       "tags": ["n8n", "workflow", "automation", "mcp"]
     }

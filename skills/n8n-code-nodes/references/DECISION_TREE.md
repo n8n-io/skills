@@ -90,19 +90,13 @@ But: ask if part can be a built-in (Aggregate, Summarize, Sort, Group). Check vi
 
 Median, percentile, ratio-of-ratios, normalized scores: anything needing all items to compute an answer for any one. Single-item tools can't express this.
 
-### Reason C: Workflow static data
-
-Code can read/write `getWorkflowStaticData()` for persistent state. Use cases: dedup tracking, cumulative counters, last-seen markers.
-
-Prefer a Data Table for anything inspectable later. Static data is fine for small ephemeral counters.
-
-### Reason D: Crypto operations
+### Reason C: Crypto operations
 
 HMAC signing, JWT verification, custom encryption. JS has `require('crypto')`. Python has `hashlib` and `hmac`.
 
 Counter-question: is this for *auth*? See `n8n-credentials-and-security`. `httpCustomAuth` may handle it without code.
 
-### Reason E: User has existing JS/Python they want to drop in
+### Reason D: User has existing JS/Python they want to drop in
 
 Worth pushing back on. n8n workflows are visual, and dropping a 200-line script defeats most of the value. Options:
 

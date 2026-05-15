@@ -86,6 +86,8 @@ Common case: the user wants a service n8n has no node for. Use HTTP Request with
 |---|---|---|
 | Pasting `sk-...` into HTTP Request's `Authorization` header value field | Token in plain text in the workflow JSON, leaks on export, copy, screenshot | Use a credential: `Bearer Auth` for bearer tokens, `Header Auth` for other custom auth schemes |
 | Storing token in a Set node and referencing via expression | Same problem, value lives in workflow JSON | Same fix: credential, not a Set node |
+| Storing a secret in `$vars.X` and reading it as the auth value | Not encrypted at rest, leaks in exports, no rotation | Use the right credential type (`httpBearerAuth`, `httpHeaderAuth`, `httpCustomAuth`, or the native one). For inbound webhook auth, use the trigger's `authentication` field, not an IF on `$vars.token` |
+| Reaching for `$env.X` to read a secret during custom auth setup | Doesn't work, throws at runtime | Use a credential of the appropriate type |
 | Using HTTP Request when a native node exists | Loses auto-refresh on OAuth, loses native error handling, more code | Use the native node |
 | Hardcoding credentials in SDK code (`new HttpRequest({ headers: { Authorization: 'Bearer xxx' } })`) | Same leak surface | Use `newCredential()` in SDK code |
 | Asking the user to create a credential without naming the credential *type* | User picks the wrong type, auth fails confusingly | Always specify: "create a credential of type `<exact type name>`" |

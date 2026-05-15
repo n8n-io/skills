@@ -17,7 +17,7 @@ The split matters when **the sub-workflow's body assumes it sees exactly one ite
 
 **Principle: when a sub-workflow has multiple input paths whose contracts genuinely differ, split into one outer sub-workflow per contract, all calling a shared downstream sub-workflow for the common work.**
 
-The forcing function in n8n: passthrough (required for binary) and Define Below (required for typed inputs agent tools and structured callers can fill) are mutually exclusive on one trigger. Common cases:
+The forcing function in n8n: passthrough (required for binary, also required when the sub-workflow takes no inputs since Define Below needs at least one field) and Define Below (required for typed inputs agent tools and structured callers can fill) are mutually exclusive on one trigger. Common cases:
 
 - **Binary vs non-binary input** (canonical).
 - **Sync vs async paths** with different return contracts.

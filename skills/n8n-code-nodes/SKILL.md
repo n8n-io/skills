@@ -9,7 +9,7 @@ The Code node is powerful and often the wrong tool. The n8n equivalent of droppi
 
 ## Strong defaults
 
-1. **Code node is a last resort.** Decision order: expression (`{{...}}`) → arrow function inside Edit Fields → Code node. The first two paths cover most "transform this data" tasks. Code earns its place for multi-source aggregation, external libraries, stateful work (`getWorkflowStaticData`), and a few specific patterns documented below.
+1. **Code node is a last resort.** Decision order: expression (`{{...}}`) → arrow function inside Edit Fields → Code node. The first two paths cover most "transform this data" tasks. Code earns its place for multi-source aggregation, external libraries, and a few specific patterns documented below.
 
 2. **Default to JavaScript.** Write JS unless the user explicitly asked for Python ("use Python here," "I'm a Python shop," pasted Python code). Everywhere else in n8n (expressions, Edit Fields) is JS, JS has a curated library allowlist (`lodash`, `crypto`, `luxon`).
 
@@ -196,10 +196,6 @@ return { json: { title: firstEntry.title, url: firstEntry.link.find(link => link
 ```
 
 If the field-extraction logic is genuinely too gnarly for inline expressions even with multi-line arrow functions, the next stop is Edit Fields with a single multi-line arrow function, NOT a Code node. See `references/ARROW_FUNCTIONS_IN_EDIT_FIELDS.md`.
-
-### Stateful transformations across runs
-
-Code can read/write workflow static data, but expressions can't. Use cases: dedup tracking, cumulative counters, last-seen markers. Prefer Data Tables for anything inspectable later.
 
 ### What these have in common
 

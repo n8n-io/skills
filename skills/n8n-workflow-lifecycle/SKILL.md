@@ -155,4 +155,5 @@ Keep it tight: half a dozen bullets, not a wall of text. The user shouldn't have
 | No sticky notes on a 15-node workflow | Reader has to read every node to find what they want | Add stickies per logical section. See "Readability" above |
 | Sticky titled "Set, If, Set" or sticky-of-every-color | Re-states what's visible / color becomes pure noise | Title with the *purpose*; one color per category |
 | `description: "Sends Slack."` | Adds nothing visible from the trigger and Slack node | Include *why* + AI-derived context: "Sends weekly summary to founders. Replaces manual report that kept getting skipped." |
+| Designing fan-out branches as if they execute concurrently | n8n runs fan-out branches sequentially, top-to-bottom by Y-position. Total runtime is the sum of branches, not the max | For real concurrency, dispatch via `Execute Workflow` with `mode: 'each'` + `waitForSubWorkflow: false`. See `n8n-subworkflows` "Fire-and-forget parallelization" |
 

@@ -46,7 +46,7 @@ const subTrigger = trigger({
 
 Each declared input becomes a parameter the caller can fill. Type enforcement happens on the agent side via the `type` argument of `$fromAI(key, description, type, defaultValue?)`, not at the trigger itself. Allowed types: `string`, `number`, `boolean`, `json`. A wrong-typed value fails the call, so match the type in the trigger and in `$fromAI`.
 
-**The trigger MUST be in "Define Below" mode (typed fields), not passthrough.** Passthrough has no schema, so the agent has nothing to fill via `fromAi`. The only valid use of passthrough is when the sub-workflow needs binary, and in that case it can't be wired as an agent tool directly. Pre-stage binary to storage and pass storage keys as typed string fields instead. See `n8n-binary-and-data` `AGENT_TOOL_BINARY.md` and `n8n-subworkflows` SKILL.md "Sub-workflow inputs and outputs".
+**The trigger MUST be in "Define Below" mode (typed fields), not passthrough.** Passthrough has no schema, so the agent has nothing to fill via `fromAi`. Two exceptions: (a) the sub-workflow needs binary, in which case it can't be wired as an agent tool directly (pre-stage binary to storage and pass storage keys as typed string fields instead), or (b) the sub-workflow takes no inputs at all, in which case passthrough is the only option since Define Below requires at least one field, and the tool's only decision is whether to invoke (see `TOOLS.md` "zero `fromAi` parameters"). See `n8n-binary-and-data` `AGENT_TOOL_BINARY.md` and `n8n-subworkflows` SKILL.md "Sub-workflow inputs and outputs".
 
 ### The Tool Workflow side
 

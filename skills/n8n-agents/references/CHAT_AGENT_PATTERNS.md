@@ -36,7 +36,13 @@ Receives chat events, decides whether to respond, manages UX, calls the core, re
 
 The bot's own messages re-trigger the workflow. Slack, Discord, Teams all emit events for posts the bot itself made. Without filtering, every reply triggers another run, then another, until rate limits or n8n concurrency stops it.
 
-**Prefer trigger-level filtering when the trigger supports it.** Some triggers expose user-ID filtering in their options so the loop breaks before any downstream node fires. The Slack Trigger has a `userIds` option for exactly this:
+**Prefer trigger-level filtering when the trigger supports it.** Some triggers expose user-ID filtering in their options so the loop breaks before any downstream node fires. Semantics differ per surface, verify against the version you're on:
+
+- **Slack** (`n8n-nodes-base.slackTrigger`): `options.userIds` is an **exclusion list**. Listed users are dropped before the workflow runs. Put the bot's user ID here for anti-loop. Verified in the trigger source: the handler returns early `if (userIds.includes(event.user))`.
+- **Telegram** (`n8n-nodes-base.telegramTrigger`): `additionalFields.userIds` is an **inclusion / allowlist** (only listed users fire the trigger). Not a bot-exclusion filter, but useful for restricting a private bot to specific human users; bot loops are usually a non-issue on Telegram since bots don't see their own messages by default. Pair with `additionalFields.chatIds` for scope.
+- **Discord, Teams**: no native user-level trigger filter. The downstream filter node below is the only option.
+
+Slack trigger-level example:
 
 ```ts
 const slackTrigger = trigger({
@@ -55,7 +61,7 @@ const slackTrigger = trigger({
 
 When the trigger filters at its own boundary, you don't need a separate filter node.
 
-**When the trigger doesn't expose a user filter** (Discord, Teams, Telegram in many cases), the first node after the trigger must filter the bot's own user ID out:
+**When the trigger doesn't expose a usable exclusion filter** (currently Teams, plus Discord via community nodes that vary), the first node after the trigger must filter the bot's own user ID out:
 
 ```ts
 const filterBot = node({
@@ -201,7 +207,7 @@ When the domain schema can change at runtime (Notion DB property options evolve,
     {{ $('Get a database').first().json.properties.toJsonString() }}
 ```
 
-One extra API call per invocation, and in exchange the sub-agent never returns "that property doesn't exist" because the prompt is stale. Worth it for low-call-volume chat assistants. For high-volume hot paths, cache the schema in workflow static data with a TTL.
+One extra API call per invocation, and in exchange the sub-agent never returns "that property doesn't exist" because the prompt is stale. Worth it for low-call-volume chat assistants. For high-volume hot paths, cache the schema in a Data Table with a TTL.
 
 ## Worked example: a personal Slack assistant
 
@@ -229,7 +235,8 @@ Three workflows demonstrating the full pattern:
 
 | Anti-pattern | What goes wrong | Fix |
 |---|---|---|
-| No bot-user-ID filter at the top of the shell | Bot's own messages re-trigger the workflow, infinite loop | Filter on `$json.user !== '<BOT_USER_ID>'` as the first node after the trigger |
+| No bot-user-ID filter at the top of the shell | Bot's own messages re-trigger the workflow, infinite loop | Prefer trigger-level filtering when available (Slack: `options.userIds` is an exclusion list, put the bot ID there). Otherwise filter on `$json.user !== '<BOT_USER_ID>'` as the first node after the trigger |
+| Putting the bot's user ID in Telegram's `userIds` expecting exclusion semantics | Telegram's `userIds` is an **allowlist**, not an exclusion list. Only the bot would fire the trigger, which means no human messages get through. Workflow looks "fixed" until you realize it's been silent for hours | Telegram bots don't see their own messages by default, so anti-loop usually isn't needed. If you need to restrict who can talk to the bot, use `userIds` as the allowlist of permitted humans, not as a place for the bot's ID |
 | Loading indicator added but only removed on the success path | User sees the bot stuck "thinking" forever after any error | `onError: 'continueErrorOutput'` on the agent call, remove the indicator on both branches |
 | Using user ID, channel ID, or workspace ID as the session key | Conversations cross threads inside the same channel | Use the surface's thread primitive (Slack `thread_ts || ts`, Discord thread ID, Teams reply ID) |
 | Stuffing trigger + UX + agent + sub-agent tools into one workflow when the agent already has multi-surface, sub-agent, or reuse needs | Can't reuse across surfaces, UX leaks into reasoning, harder to test in isolation | Split into shell + core + sub-agents (but only once one of those needs is real, simple bots stay in one workflow) |

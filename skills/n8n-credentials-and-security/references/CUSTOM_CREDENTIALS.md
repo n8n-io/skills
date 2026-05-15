@@ -46,10 +46,6 @@ What gets injected:
 - `qs`: each key/value becomes a query string parameter.
 - Consulted per request, no refresh logic (static values).
 
-## Don't store the secret in `$env`
-
-A tempting shortcut on self-hosted: set the secret as an environment variable and read it with `$env`. Don't. Environment variables aren't encrypted at rest the way credentials are, leak more readily into logs and process listings, and skip the per-credential rotation story. Use `httpCustomAuth`.
-
 ## Asking the user
 
 Give concrete instructions:

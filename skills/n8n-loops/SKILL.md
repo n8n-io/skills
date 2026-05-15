@@ -198,4 +198,5 @@ Watch recursion depth. n8n has nested-execution limits. For deep recursion, a qu
 | Sending one Slack message per item when you wanted a summary | Slack channel floods, rate limits hit, embarrassment | `executeOnce: true` on the Slack node, build the summary upstream |
 | Two branches both reach `Respond to Webhook` | Responds twice, downstream callers see errors | Merge before the responder, or ensure only one branch reaches it |
 | `Loop Over Items` with `Reset` and no clear termination | Infinite loop, n8n eats memory until the execution is killed | Always have a clear termination condition. Prefer HTTP pagination for paged APIs |
+| Nesting one `Loop Over Items` inside another in the same workflow | Broken at runtime, validation passes | Move the inner loop into a sub-workflow called per outer iteration. See `n8n-subworkflows` `mode: 'each'` |
 

@@ -285,6 +285,10 @@ If the HTTP node should send the *whole batch* as one request, set `executeOnce:
 
 `reset: true` without a stop condition is an infinite loop. n8n eats memory until killed. Always have explicit termination (IF/Switch breaking out on stop) AND a `$runIndex` ceiling.
 
+### Nesting Loop Over Items inside Loop Over Items
+
+Doesn't work. Validation passes, breaks at runtime. Extract the inner loop into a sub-workflow and call it from the outer iteration via `Execute Workflow` with `mode: 'each'`.
+
 ## Verification before publishing
 
 After wiring a `Loop Over Items` node, pull via `get_workflow_details` and verify:

@@ -48,14 +48,18 @@ Walk the workflow with these questions in mind. These are patterns that recur ac
 - Count wires going in. Confirm `numberOfInputs` matches.
 - For Merges using `useDataOfInput`, walk through the off-by-one rule (`MERGE_INDEX_RULES.md`).
 
+**Fan-out branches:**
+- If the design assumes branches run in parallel, it's wrong. n8n runs them sequentially top-to-bottom by Y-position. For real concurrency, dispatch via `Execute Workflow` with `mode: 'each'` + `waitForSubWorkflow: false`.
+
 **DateTime nodes:**
 - Replace with a Luxon expression (see `n8n-expressions`). DateTime nodes are almost always wrong.
 
 **Sub-workflow triggers:**
-- For each `Execute Workflow Trigger`, confirm **"Define Below"** mode with typed fields. Passthrough is only correct for binary-receiving sub-workflows that won't be agent tools (`n8n-subworkflows` non-negotiable #6).
+- For each `Execute Workflow Trigger`, confirm **"Define Below"** mode with typed fields. Passthrough is only correct for (a) binary-receiving sub-workflows that won't be agent tools or (b) sub-workflows that genuinely take no inputs (Define Below requires at least one field). For (b), verify the body opens with a `Set` ("Keep Only Set", no fields) and a sticky noting no inputs are expected. See `n8n-subworkflows` non-negotiable #2.
 
 **Data references:**
 - Search for `$json.` in expressions. Replace with `$('Node Name').item.json.` unless the node is directly downstream of a single source with no intermediates (`n8n-expressions` non-negotiable #1).
+- Search for `$env.` in expressions. Doesn't work, throws at runtime. Replace with `$vars.X` (paid plans), a Data Table, or a credential if it's a secret.
 
 Skipping it is how build-time slips slip past validation.
 

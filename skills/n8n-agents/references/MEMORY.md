@@ -29,7 +29,7 @@ const bufferMemory = memory({
 
 `contextWindowLength` is the number of exchanges retained. **The default is 5, which is very low for modern chat expectations**, where users typically assume a conversation feels close to endless. 50 is a reasonable starting point for most chat agents. Higher = more context, more tokens.
 
-**Messages past the window are removed from memory entirely.** Once the buffer fills, the oldest exchanges are dropped and the agent can't recall, search, or know they ever existed. If a user said something 60 turns ago and the window is 50, that information is gone from the agent's perspective. For recall beyond the window, raise `contextWindowLength`, persist key facts somewhere queryable (Data Table, workflow static data injected into the system prompt).
+**Messages past the window are removed from memory entirely.** Once the buffer fills, the oldest exchanges are dropped and the agent can't recall, search, or know they ever existed. If a user said something 60 turns ago and the window is 50, that information is gone from the agent's perspective. For recall beyond the window, raise `contextWindowLength`, or persist key facts in a Data Table that's read and injected into the system prompt.
 
 **Persistence:** keeps the last N messages per memory key and persists across executions via n8n's internal store. With `sessionIdType: 'customKey'`, you bind the key to any expression: `{{ $json.sessionId }}` from a chat trigger, a Slack `thread_ts`, a multi-tenant composite, etc. Multiple users / threads / contexts each get their own memory bucket. The "window" is the sliding cap on how many messages stay in context, not a scope on persistence.
 
