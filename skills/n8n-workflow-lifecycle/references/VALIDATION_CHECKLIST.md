@@ -8,21 +8,7 @@ Run before every `publish_workflow`. The whole list. Skipping items is how broke
 
 Run `validate_workflow`. Schema and shape errors must be zero. If validation fails, fix and re-validate.
 
-### 2. Connections verified via `get_workflow_details`
-
-`validate_workflow` does **not** catch the `.to()`-inside-`.add()` trap or merge-index off-by-one. Pull the workflow back and walk every `.add(...)` call against the returned `connections` object.
-
-For the full protocol, invoke the `n8n-connections` skill (`references/VERIFICATION.md`).
-
-Common failure modes:
-
-- A fan-out collapsed to one connection (the `.to()` trap).
-- A merge input on the wrong index (off-by-one with `useDataOfInput`).
-- A merge with 3+ sources but `numberOfInputs` left at the default of 2 (third source silently drops).
-- An error output with `onError: 'continueErrorOutput'` but `main[1]` empty.
-- `main[1]` wired but `onError` isn't `continueErrorOutput`.
-
-### 2.5 Antipattern scan (the build-time discipline check)
+### 2. Antipattern scan (the build-time discipline check)
 
 Walk the workflow with these questions in mind. These are patterns that recur across builds even when relevant skills are loaded, so making this explicit catches them.
 
@@ -46,7 +32,7 @@ Walk the workflow with these questions in mind. These are patterns that recur ac
 
 **Merge nodes:**
 - Count wires going in. Confirm `numberOfInputs` matches.
-- For Merges using `useDataOfInput`, walk through the off-by-one rule (`MERGE_INDEX_RULES.md`).
+- For Merges using `useDataOfInput`, walk through the off-by-one rule (`n8n-node-configuration` `references/MERGE_NODE.md`).
 
 **Fan-out branches:**
 - If the design assumes branches run in parallel, it's wrong. n8n runs them sequentially top-to-bottom by Y-position. For real concurrency, dispatch via `Execute Workflow` with `mode: 'each'` + `waitForSubWorkflow: false`.

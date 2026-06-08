@@ -326,7 +326,7 @@ Before publishing:
 
 1. Test the success path with `test_workflow`. Confirm shape and code. **API workflows almost always have side-effecty downstreams (DB writes, third-party calls, comms), so ask the user before testing.** See `n8n-workflow-lifecycle` `references/TESTING.md`.
 2. Trigger an error path. Use `prepare_test_pin_data` to inject a value that breaks a processing node, then `test_workflow`. Confirm the error Respond fires with the right code/body.
-3. Verify connections via `get_workflow_details`. Every fallible node has `onError: 'continueErrorOutput'` AND `output(1)` wired. See `n8n-connections` `VERIFICATION.md`.
+3. Verify connections via `get_workflow_details`. Every fallible node has `onError: 'continueErrorOutput'` AND `output(1)` wired. See `references/NODE_ERROR_OUTPUTS.md`.
 4. Confirm no internal details leak in the error body.
 
 If any are off, fix before publish.

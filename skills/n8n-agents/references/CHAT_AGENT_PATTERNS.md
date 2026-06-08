@@ -125,7 +125,7 @@ Users assume nothing is happening if they don't see acknowledgement. Pattern: **
         └── (error)   → [Remove reaction] → [Send error message with link]
 ```
 
-The error path is the easy one to forget. Without it, the loading indicator sits forever and the user thinks the bot is still working. `onError: 'continueErrorOutput'` on the `Execute Workflow` node enables the second branch (see `n8n-connections` `references/ERROR_OUTPUTS.md`).
+The error path is the easy one to forget. Without it, the loading indicator sits forever and the user thinks the bot is still working. `onError: 'continueErrorOutput'` on the `Execute Workflow` node enables the second branch (see `n8n-error-handling` `references/NODE_ERROR_OUTPUTS.md`).
 
 For Slack: `slack` node with `resource: 'reaction'`, `operation: 'add'` and `'remove'`. For Discord/Telegram, typing indicators are time-bounded, so for long agents, you could, for instance, send a placeholder message and edit it instead.
 
@@ -227,7 +227,7 @@ Three workflows demonstrating the full pattern:
 - `STRUCTURED_OUTPUT.md`: parser config, autoFix, fixer model selection.
 - `MEMORY.md`: memory types, `sessionKey` persistence options.
 - `CHATHUB.md`: when the chat surface is ChatHub instead.
-- `n8n-connections` `references/ERROR_OUTPUTS.md`: `onError: 'continueErrorOutput'`.
+- `n8n-error-handling` `references/NODE_ERROR_OUTPUTS.md`: `onError: 'continueErrorOutput'`.
 - `n8n-node-configuration` `references/COMMS_NODES.md`: Slack node parameter shapes.
 - `n8n-binary-and-data` `references/AGENT_TOOL_BINARY.md`: receiving uploaded files and returning generated files. Read the "Surface-specific seams" section before assuming your platform's file events or image rendering match ChatHub's.
 

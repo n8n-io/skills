@@ -297,5 +297,3 @@ After wiring a `Loop Over Items` node, pull via `get_workflow_details` and verif
 2. **Done output (index 0)** flows into the post-loop step (or is unused for `reset: true` polling).
 3. Aggregate nodes inside the loop or on the done branch have `executeOnce: true` if they should fire once.
 4. Clear termination: bounded input array, or a stop branch with a `$runIndex` fallback.
-
-See `n8n-connections` `VERIFICATION.md` for the general protocol.

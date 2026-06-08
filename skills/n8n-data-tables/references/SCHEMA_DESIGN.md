@@ -197,7 +197,7 @@ The `columns` parameter has two modes: `mappingMode: 'defineBelow'` (manual per-
 
 Default to `defineBelow`. Explicit, expressions sit at the consumer, refactors read clearly. Auto-map only when you have a stable 1:1 between upstream field names and column names. Drift in either side silently breaks the mapping.
 
-For the `$json.x` vs `$('Node Name').item.json.x` discipline that prevents silent NULLs when intermediate nodes strip json, see `n8n-expressions`. For Merge convergence and same-shape branches, see `n8n-connections`.
+For the `$json.x` vs `$('Node Name').item.json.x` discipline that prevents silent NULLs when intermediate nodes strip json, see `n8n-expressions`. For Merge convergence and same-shape branches, see `n8n-node-configuration` `references/MERGE_NODE.md`.
 
 ## Cross-references
 
@@ -205,4 +205,4 @@ For the `$json.x` vs `$('Node Name').item.json.x` discipline that prevents silen
 - Dedup patterns: `DEDUP_PATTERNS.md`.
 - Data Tables vs external storage: parent `SKILL.md`.
 - Expression discipline (`$json` vs named references, Set-node antipattern): `n8n-expressions`.
-- Branch / Merge wiring: `n8n-connections`.
+- Branch / Merge wiring: `n8n-node-configuration` `references/MERGE_NODE.md`.

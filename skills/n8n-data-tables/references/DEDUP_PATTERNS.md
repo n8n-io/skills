@@ -93,7 +93,7 @@ For both branches, "process new" AND "return existing":
 Two notes:
 
 - **`alwaysOutputData: true` on Get.** Without it, no-match produces zero items and the pipeline silently does nothing. With it, Get always emits one item (possibly empty), and the IF can branch.
-- **Both branches must produce the same JSON shape.** Otherwise downstream `$json.x` breaks depending on which branch fired. See `n8n-connections` for the Merge convergence anchor.
+- **Both branches must produce the same JSON shape.** Otherwise downstream `$json.x` breaks depending on which branch fired. See `n8n-node-configuration` `references/MERGE_NODE.md` for the Merge convergence anchor.
 
 ## Pattern decision tree
 

@@ -106,7 +106,7 @@ if matches '(^|\.)merge$'; then
   WARNINGS+="
 
 [Merge node detected in this lookup]
-STOP and invoke the n8n-connections skill via the Skill tool, especially references/MERGE_INDEX_RULES.md, NOW. Two silent failure modes:
+STOP and invoke the n8n-node-configuration skill via the Skill tool, especially references/MERGE_NODE.md, NOW. Two silent failure modes:
 
 1. Merge defaults to 2 inputs. If 3+ sources converge into this Merge, set numberOfInputs explicitly (or the equivalent param on your n8n version) to match. Otherwise the third+ sources silently drop at runtime even though the connection lines are drawn.
 

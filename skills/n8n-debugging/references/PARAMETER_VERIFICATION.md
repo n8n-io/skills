@@ -70,11 +70,11 @@ OAuth note: n8n auto-refreshes OAuth tokens. The user does not need to re-authen
 
 ## Connection (wiring) checks
 
-Per `n8n-connections`'s `VERIFICATION.md`:
+`validate_workflow` doesn't catch wiring traps. Manual checks via `get_workflow_details`:
 
-- Did `.to()` silently drop a wire?
-- Is a fan-out collapsed?
-- Is a Merge index off-by-one?
+- Is a Merge `numberOfInputs` left at the default 2 when 3+ sources converge? → `n8n-node-configuration` `references/MERGE_NODE.md`
+- Is `useDataOfInput` set to a value that doesn't match the wire feeding that input? → `n8n-node-configuration` `references/MERGE_NODE.md`
+- Is `onError: 'continueErrorOutput'` set on the node but `main[1]` empty, or vice versa? → `n8n-error-handling` `references/NODE_ERROR_OUTPUTS.md`
 
 These don't surface as parameter errors. The node runs with bad input. Always inspect connections after a failed update.
 

@@ -29,7 +29,7 @@ These rationalizations cause skills to be skipped. If you catch yourself thinkin
 | "This workflow is simple, I'll just build it" | Invoke `n8n-workflow-lifecycle`. Most "simple" workflows are 10+ nodes by the time they ship. |
 | "I'll add a Set node here to map these fields" | Invoke `n8n-expressions`. Set nodes feeding only 0 or 1 downstream consumer are the most common antipattern in this entire pack. |
 | "I'll just use a Code node, it's easier" | Invoke `n8n-code-nodes`. The bar is high. Most reaches for Code can be expressions or Edit Fields with arrow functions. |
-| "Validation passed, I'm ready to publish" | Invoke `n8n-workflow-lifecycle` and walk `VALIDATION_CHECKLIST.md` section 2.5 (the antipattern scan). Validation passing is necessary, not sufficient. |
+| "Validation passed, I'm ready to publish" | Invoke `n8n-workflow-lifecycle` and walk `VALIDATION_CHECKLIST.md` section 2 (the antipattern scan). Validation passing is necessary, not sufficient. |
 | "The agent is wired up, the tool descriptions look fine" | Invoke `n8n-agents` `references/TOOLS.md`. Tool names and descriptions ARE part of the prompt, and "looks fine" usually means generic. |
 | "I'll set this sub-workflow trigger to passthrough" | Invoke `n8n-subworkflows`. Passthrough is only correct for binary-receiving sub-workflows that won't be agent tools, or for sub-workflows that genuinely take no inputs (Define Below requires at least one field). |
 | "I'll use passthrough so binary works, then branch internally on which input shape arrived" | Invoke `n8n-subworkflows` `references/SUBWORKFLOW_PATTERNS.md` "Splitting by input shape". This is the signal to SPLIT into two outer sub-workflows (one Define Below, one passthrough) sharing a common downstream sub-workflow. Don't fight passthrough vs Define Below in one trigger. |
@@ -37,8 +37,8 @@ These rationalizations cause skills to be skipped. If you catch yourself thinkin
 | "The user mentioned data analysis, I'll write Python" | Invoke `n8n-code-nodes`. Default is JavaScript. Python only when explicitly asked. |
 | "I'll add a Loop Over Items here to process each row" | Invoke `n8n-loops`. Default per-item iteration probably handles it without a Loop Over Items node. |
 | "Date math, I'll use a DateTime node" | Invoke `n8n-expressions`. DateTime nodes are almost always wrong. |
-| "I'll wrap this in a Merge with 3 sources" | Invoke `n8n-connections` `references/MERGE_INDEX_RULES.md`. Merge defaults to 2 inputs, and 3+ sources need `numberOfInputs` set explicitly. |
-| "I'll fan out these three slow steps to run in parallel" | Invoke `n8n-connections` `references/FAN_OUT_FAN_IN.md`. n8n executes fan-out branches sequentially (top-to-bottom by Y-position), not concurrently. For real concurrency use sub-workflows with `mode: 'each'` + `waitForSubWorkflow: false`. |
+| "I'll wrap this in a Merge with 3 sources" | Invoke `n8n-node-configuration` `references/MERGE_NODE.md`. Merge defaults to 2 inputs, and 3+ sources need `numberOfInputs` set explicitly. |
+| "I'll fan out these three slow steps to run in parallel" | Invoke `n8n-workflow-lifecycle` and read the Execution model section. n8n executes fan-out branches sequentially (top-to-bottom by Y-position), not concurrently. For real concurrency, see `n8n-loops` and `n8n-subworkflows` (`mode: 'each'` + `waitForSubWorkflow: false`). |
 | "User said which project, I'll just build it" | Invoke `n8n-workflow-lifecycle`. Project is not folder. Ask about folder placement BEFORE building. The MCP can't create folders, so if the requested folder doesn't exist, the user must create it in the UI first. |
 | "I'll just run `test_workflow` to see what happens" | Invoke `n8n-workflow-lifecycle` `references/TESTING.md`. `test_workflow` mocks the trigger only. Slack sends, DB writes, payments all fire for real. Ask the user first when downstreams have side effects. |
 
@@ -56,7 +56,6 @@ Invoke via the Skill tool. Trigger column = when to invoke.
 | `n8n-expressions` | Writing `{{}}`, `$json`, `$node`, expression errors. Luxon for dates, indented multi-line, prefer expressions over extra nodes |
 | `n8n-node-configuration` | Configuring any node. Operation-aware, property dependencies, never assume parameters |
 | `n8n-code-nodes` | User reaches for a Code node, or custom logic is needed. Decision tree, JavaScript patterns when truly required |
-| `n8n-connections` | Wiring IF, Switch, Merge, error outputs, or any non-linear connection. Multi-IO traps, fan-out/fan-in, merge index rules |
 | `n8n-loops` | Multi-item data, batching, paginated APIs, "for each" or "loop over" mentions. Default per-item iteration, `executeOnce`, Loop Over Items, HTTP pagination |
 | `n8n-agents` | LangChain Agent node, tool calling, system prompts, structured output, memory, RAG. Tool names/descriptions as part of the prompt, sub-workflow as tool, modular prompt design |
 | `n8n-error-handling` | Webhook-triggered or production-bound workflows. Error branch on every fallible node, 4xx for caller errors and 5xx for execution errors |

@@ -44,12 +44,24 @@ Skipping a stage produces workflows that look done but break in production, or s
 Validation is necessary but not sufficient. The real gate is:
 
 1. `validate_workflow` passes.
-2. `get_workflow_details` returns a `connections` object that matches your intent (see `n8n-connections` and its `VERIFICATION.md`).
+2. `get_workflow_details` returns a `connections` object that matches your intent.
 3. `test_workflow` produces the right output on representative pinned data.
 
 Only then call `publish_workflow`.
 
 For the full pre-publish checklist, see `references/VALIDATION_CHECKLIST.md`.
+
+## Execution model
+
+n8n workflows execute **sequentially, left-to-right, top-to-bottom**. Branches that visually appear parallel on the canvas (fan-out from one source to multiple downstreams) run one after the other, ordered by the target nodes' Y-position on the canvas. There is no automatic concurrency.
+
+Practical consequences:
+
+- A fan-out to three slow HTTP calls runs in series; total latency is the sum, not the max.
+- "Parallel" branches share workflow state in execution order; downstream consumers see whatever the last branch left.
+- For real concurrency, dispatch sub-workflows with `mode: 'each'` and `waitForSubWorkflow: false`. See `n8n-loops` and `n8n-subworkflows`.
+
+This is platform behavior, not an SDK quirk. Don't design fan-outs around assumed parallelism.
 
 ## Naming conventions
 
@@ -146,7 +158,6 @@ Keep it tight: half a dozen bullets, not a wall of text. The user shouldn't have
 | Anti-pattern | What goes wrong | Fix |
 |---|---|---|
 | Calling `publish_workflow` without validating | Broken workflows reach production | Validate, verify connections, then test |
-| Skipping `get_workflow_details` after create | Silent connection bugs ship | Always pull the workflow back. See `n8n-connections` |
 | Creating workflows at root because the requested folder doesn't exist | Workflows get lost, and the user has to drag them manually | Surface the limitation *before* building |
 | Generic node names (`HTTP Request1`, `Set2`) | Workflows are unreadable a month later | Rename to describe the action |
 | Missing `description` on `create_workflow_from_code` | Workflow invisible in search, no context for maintainers | Always include 1-2 sentences |

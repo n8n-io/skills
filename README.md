@@ -8,7 +8,7 @@ Built by the n8n team to pair with n8n's instance-level MCP server. Your coding 
 
 **What's inside:**
 
-- **15 capability skills** covering best practices across the full workflow lifecycle: sub-workflow reuse, expressions, loops and pagination, AI agents, error handling, credentials, Data Tables, debugging, and more.
+- **13 capability skills** covering best practices across the full workflow lifecycle: sub-workflow reuse, expressions, loops and pagination, AI agents, error handling, credentials, Data Tables, debugging, and more.
 - **50+ reference docs and worked examples** loaded on demand: per-node gotchas, decision trees, and copy-pasteable workflow JSON / TypeScript SDK snippets.
 - **A SessionStart hook** that loads the protocol on every session, including a compact reference for every n8n MCP tool.
 - **PreToolUse hooks** that nudge your agent to consult the matching skill before high-impact MCP calls.
@@ -70,7 +70,6 @@ and follow its routing into the matching capability skill before acting.
 | `n8n-expressions` | Writing `{{}}`, `$json`, `$node` |
 | `n8n-node-configuration` | Configuring any node |
 | `n8n-code-nodes` | Custom logic, Code node consideration |
-| `n8n-connections` | IF/Switch/Merge wiring, multi-IO |
 | `n8n-loops` | Loops, batching, paginated APIs |
 | `n8n-agents` | LangChain Agent node, tools, system prompts, structured output |
 | `n8n-error-handling` | Webhook APIs, production workflows |
@@ -79,7 +78,7 @@ and follow its routing into the matching capability skill before acting.
 | `n8n-data-tables` | Data Tables: schemas, dedup, persistent state |
 | `n8n-debugging` | Things break |
 
-A 15th meta-skill, `using-n8n-skills`, is loaded by the SessionStart hook in plugins and routes your agent to the right capability skill on every n8n task.
+A 14th meta-skill, `using-n8n-skills`, is loaded by the SessionStart hook in plugins and routes your agent to the right capability skill on every n8n task.
 
 ## How it works
 

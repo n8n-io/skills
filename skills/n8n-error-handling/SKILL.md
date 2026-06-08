@@ -1,6 +1,6 @@
 ---
 name: n8n-error-handling
-description: Use when building any webhook-triggered workflow, scheduled/production-bound workflow, or any workflow where silent failure would drop user-visible work. Triggers on "webhook", "respond to webhook", "API", "production", "error", "failure", "5xx", "try/catch", "error workflow", "onError", "scheduled", or any workflow that runs unattended.
+description: Use when building any webhook-triggered workflow, scheduled/production-bound workflow, wiring a per-node error output, or any workflow where silent failure would drop user-visible work. Triggers on "webhook", "respond to webhook", "API", "production", "error", "failure", "5xx", "try/catch", "error workflow", "onError", "continueErrorOutput", "error branch", "node error output", "output(1)", "main[1]", "scheduled", or any workflow that runs unattended.
 ---
 
 # n8n Error Handling
@@ -60,7 +60,7 @@ The full procedure, supported constraint patterns, schema design rules, and the 
 
 ## Per-node error setup (recap)
 
-Each fallible node needs two changes (per `n8n-connections` `ERROR_OUTPUTS.md`):
+Each fallible node needs two changes (see `references/NODE_ERROR_OUTPUTS.md`):
 
 1. **Set `onError: 'continueErrorOutput'`** on the node config.
 2. **Wire `output(1)`** to your error handler.
@@ -143,6 +143,7 @@ See `references/ERROR_WORKFLOWS.md`.
 | `references/API_WORKFLOWS.md` | Building or reviewing a webhook-trigger / respond-to-webhook workflow |
 | `references/ERROR_WORKFLOWS.md` | Setting up workflow-level error catching for production workflows |
 | `references/RESPONSE_SHAPES.md` | Defining the response body conventions for your APIs |
+| `references/NODE_ERROR_OUTPUTS.md` | Wiring a per-node error output on individual fallible nodes |
 
 ## Anti-patterns
 
