@@ -14,7 +14,7 @@ Chat messages render as HTML/JSON. Embedded images reference URLs:
 <img src="https://cdn.example.com/img/abc123.png">
 ```
 
-Some surfaces (Slack `files.upload`, Discord attachments, Telegram `sendPhoto`) accept binary directly via the platform's file API. Either way, the bytes have to live somewhere the chat client can fetch over HTTPS.
+Some surfaces (Slack's `files.getUploadURLExternal` + `files.completeUploadExternal` two-step, Discord attachments, Telegram `sendPhoto`) accept binary directly via the platform's file API. Either way, the bytes have to live somewhere the chat client can fetch over HTTPS.
 
 ## What the user needs
 

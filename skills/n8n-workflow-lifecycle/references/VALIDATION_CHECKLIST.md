@@ -111,7 +111,7 @@ See `MCP_ACCESS_PER_WORKFLOW.md`.
 
 Top-to-bottom. Items 1-4 are gates: failing any means the workflow shouldn't publish. Items 5-8 are quality checks: failing means the workflow ships and rots, but won't break immediately.
 
-The most common skip is item 2 (connection verification). It looks redundant with item 1, but it isn't. See the parent SKILL.md's "Validation isn't enough" section.
+The most common skip is item 2 (the antipattern scan). It feels like polish, but it catches things `validate_workflow` doesn't.
 
 ## What to do if something fails after publish
 

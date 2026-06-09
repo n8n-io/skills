@@ -18,9 +18,9 @@ The MCP calls your workflow as if it were a native tool: input from the `Execute
 Case 1 (wrap n8n capability):
 
 - Folder CRUD (create, rename, move, delete): REST API exists, no MCP tool yet.
-- Tag CRUD: no API, no MCP tool.
+- Tag CRUD (create, list, get, delete): REST API exists, no MCP tool yet.
 - Instance metadata (limits, plan info, configured integrations): no MCP tool.
-- Credential creation: neither REST API nor MCP exposes it.
+- Credential creation: REST API exists (`POST /credentials`), no MCP tool yet.
 - Any n8n API operation the MCP doesn't natively expose.
 
 Case 2 (general agent tool):
