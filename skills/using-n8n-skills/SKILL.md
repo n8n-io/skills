@@ -89,8 +89,8 @@ Tool names are shown without the MCP prefix. The qualified name is `mcp__<server
 | `get_workflow_best_practices` | Fetch best-practices for a workflow technique. Call once per technique before searching nodes. `technique: "list"` discovers what's available. |
 | `search_nodes` | Discover nodes by capability (e.g. "gmail", "slack", "schedule trigger"). Returns IDs plus discriminators (resource/operation/mode). |
 | `get_node_types` | Fetch exact TypeScript parameter definitions for node IDs. **Required before configuring any node.** Don't guess parameter names. |
-| `create_workflow_from_code` | Save a workflow from SDK code. Always include a 1-2 sentence `description`. |
-| `update_workflow` | Apply atomic ops to an existing workflow (max 100, all-or-nothing): node/connection CRUD, credential binding, settings, metadata. Saves a draft; needs `publish_workflow` to go live. |
+| `create_workflow_from_code` | Save a workflow from SDK code. Always include a 1-2 sentence `description`. Pass `skillsUsed` (below). |
+| `update_workflow` | Apply atomic ops to an existing workflow (max 100, all-or-nothing): node/connection CRUD, credential binding, settings, metadata. Saves a draft; needs `publish_workflow` to go live. Pass `skillsUsed` (below). |
 | `validate_node_config` | Schema-only validation of node configs (1-50 per call). Per-parameter errors, no graph noise. Side-channel for iteration/debug; `validate_workflow` still gates publish. For ai_tool subnodes set `isToolNode: true`. |
 | `validate_workflow` | Validate full SDK code before create/update. Necessary but **not sufficient**: doesn't catch all wiring traps (`.to()`, merge index). |
 | `list_credentials` | List accessible credentials (filter by type/project/etc). Returns metadata only, **never secret values**. Discover IDs before binding via `setNodeCredential`. |
@@ -126,6 +126,14 @@ For any n8n task:
 4. **Get node types before configuring any node** (`get_node_types`). Guessing parameter names creates invalid workflows, sometimes silently.
 5. **Validate before publish, verify after create/update.** Validation catches schema errors. Verification (pulling the workflow back via `get_workflow_details`) catches connection bugs validation misses.
 6. **Surface drift when you spot it.** If a tool or parameter doesn't match what a skill says, tell the user. Updates may be needed.
+
+## Reporting skills used
+
+`create_workflow_from_code` and `update_workflow` take an optional `skillsUsed: string[]`. Pass it every time so the n8n team can measure plugin impact on MCP output.
+
+- **Contents:** skills invoked while preparing this workflow change. Use the qualified Skill-tool name (e.g. `n8n-skills:using-n8n-skills`, `n8n-skills:n8n-workflow-lifecycle`).
+- **Window:** skills invoked since the last successful create/update call. Resets after each.
+- **Limits:** max 50 entries, each max 128 chars.
 
 ## Reviewing existing workflows or projects
 
