@@ -28,7 +28,7 @@ For multi-header or header-plus-query auth shapes, see `CUSTOM_CREDENTIALS.md`.
 In SDK code:
 
 ```ts
-const cred = newCredential('httpHeaderAuth', { name: 'Acme API (prod)' })
+const cred = newCredential('Acme API (prod)')
 
 const fetchAcme = node({
   type: 'n8n-nodes-base.httpRequest',

@@ -8,7 +8,7 @@ description: Use when handling any auth, API keys, tokens, OAuth, bearer tokens,
 ## Non-negotiables
 
 1. **Secrets via the credential system, never in text fields or SDK code.** API keys, bearer tokens, OAuth secrets, passwords: all go through `newCredential()` or the node's `credentials` parameter. A Set node hardcoding a token and read via `{{$json.token}}` is a text field with extra steps.
-2. **Don't ask the user for credential names, but DO tell them to verify each node.** The string in `newCredential('Label')` is cosmetic and does NOT bind to a specific stored credential. When the workflow opens, n8n auto-assigns the most recently edited credential of that type to every node, which silently picks the wrong one if the user has more than one (e.g., two Gmail accounts, prod + staging API keys). After building, always tell the user: "Open every node that uses a credential and confirm the right one is selected from the dropdown." Pick a sensible label (`'Gmail'`, `'OpenRouter'`, `'Acme API'`) and move on.
+2. **List credentials, then bind by ID.** Call `list_credentials({type})` before configuring an auth-needing node. One match: bind via 2-arg `newCredential('Label', 'credId')` at create time, or `setNodeCredential` op on `update_workflow`. Multiple matches: ask the user which. The one-arg `newCredential('Label')` is a placeholder; n8n auto-assigns the most recently edited credential of that type and silently picks wrong when the user has multiples.
 3. **Credential creation is the user's job, not yours.** The n8n MCP doesn't expose credential creation. Tell the user the exact credential *type* to create in the UI, then reference it by label in your node config. Don't attempt to create credentials programmatically and don't accept secrets in chat to "set up later".
 
 ## Strong defaults
@@ -59,9 +59,8 @@ This happens. The user types something like:
 What to do:
 
 1. **Don't put the token in a text field, even temporarily.** A Set node that hardcodes the value and is referenced via `{{$json.token}}` is a text field with extra steps.
-2. **You place the node, the user creates the credential from it.** You can't create credentials, the n8n MCP doesn't expose that. Tell the user: "I'll add the node configured for the right credential type (e.g. `Bearer Auth` for bearer tokens, `Header Auth` for other custom auth headers). When you open it, click the credential dropdown and choose 'Create new credential', and n8n will prompt you for the token there." The credential field on the node will either be empty (no credential of that type exists yet) or auto-filled with the user's most recently edited one of that type (see non-negotiable #2).
-3. **For programmatic credential creation**, the MCP surface may be limited. See `n8n-extending-mcp` for wrapping n8n's credential APIs. The user must provide the secret value, and you should not be the persistent home for it.
-4. **Treat the pasted secret as compromised, and tell the user to rotate it.** Don't soften this. The token has been transmitted to the LLM provider, may persist in chat history, transcripts, and cache layers, and is now outside the user's control. Tell them: "Rotate this token as soon as the new credential is set up in n8n. Pasting a secret into chat exposes it beyond this conversation. Treat it as leaked, not just visible."
+2. **Bind to an existing credential if possible.** `list_credentials({type})` first; if a match exists, bind via `setNodeCredential` and tell the user which one you used. If none exists, tell them to create one in the UI (Bearer Auth for bearer tokens, Header Auth for custom headers, etc.). Credential creation is still UI-only.
+3. **Treat the pasted secret as compromised, and tell the user to rotate it.** Don't soften this. The token has been transmitted to the LLM provider, may persist in chat history, transcripts, and cache layers. Tell them: "Rotate this token as soon as the new credential is set up. Treat it as leaked."
 
 ## When no native node exists
 

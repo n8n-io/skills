@@ -64,7 +64,9 @@ What MCP can see on the node:
 - `id` matches an expected credential reference.
 - Credential type matches what the node expects (e.g., Slack expects `slackOAuth2Api`, not `slackApi`).
 
-What MCP can't see directly: credential contents, OAuth token state, scopes, or even whether the credential still exists on the instance. The MCP doesn't expose a general credential-listing tool, and credential creation isn't exposed either. For these, ask the user, or build a wrapper per `n8n-extending-mcp`.
+What MCP **can** see (via `list_credentials`): id, name, type, scopes, project. Use it to confirm a referenced credential still exists.
+
+What MCP **can't** see: credential contents and live OAuth token state. Credential **creation** is still UI-only (no MCP tool, no public API). Ask the user when those are needed.
 
 OAuth note: n8n auto-refreshes OAuth tokens. The user does not need to re-authenticate periodically. Persistent token errors usually mean the auth setup is wrong (incorrect type, missing scopes, app revoked on the upstream) or the upstream is rejecting the token, not that n8n forgot to refresh.
 

@@ -48,16 +48,20 @@ const slack = node({
 The shape that matters:
 
 - **The credential TYPE (`slackApi`, `gmailOAuth2`, `httpHeaderAuth`, etc.) IS load-bearing.** It must match what the node expects. Use the exact n8n type name as shown in the credential picker: "Slack API" and "Slack OAuth2" are different, and "Slack" alone is ambiguous. If the user's request is ambiguous about which auth flavor, ask before guessing.
-<!-- TEMPORARY: change once the mcp can select credentials -->
-- **The string argument to `newCredential('...')` is cosmetic.** A placeholder label in workflow JSON. It does NOT bind to a specific stored credential.
+- **The string argument to `newCredential('...')` is a placeholder label** that doesn't bind to a stored credential. At publish time, n8n auto-assigns the most recently edited credential of that type, which silently picks the wrong one when the user has multiples (prod vs staging API keys, two Gmail accounts).
 
-At import time, every node that needs a credential of a given type gets auto-assigned the user's *most recently edited* credential of that type. The dropdown is there for the user to override, but the default is silent and not based on the `newCredential('...')` label. With one credential of a type, this is fine. With multiple (prod + staging keys, two Gmail accounts), the wrong one is picked silently and auth either fails or worse, succeeds against the wrong account.
+**The recommended flow:**
 
-Implications:
-
-- **Don't ask the user for their existing credential's name before building.** Pick a sensible label and move on.
-- **Tell the user after building**: "Open every node that uses a credential and confirm the right one is selected from the dropdown. n8n auto-assigns the most recently edited one of that type, which may not be what you want."
-- **Don't worry about credential collisions across workflows.** Labels don't share state.
+1. Call `list_credentials({type})` to discover what exists.
+2. If exactly one matches, bind by ID. Two paths:
+   - **At create time:** `newCredential('Label', 'credId')`. The 2-arg form serializes to `{ id, name }` and hard-binds.
+   - **Post-create:** `setNodeCredential` op on `update_workflow`:
+     ```ts
+     { type: 'setNodeCredential', nodeName: 'Send Slack',
+       credentialKey: 'slackApi', credentialId: 'abc123', credentialName: 'Slack prod' }
+     ```
+3. If multiple match, ask the user which.
+4. If none, the user creates one in the UI (credential creation is still UI-only), then re-call `list_credentials`.
 
 
 ## Project scoping
@@ -82,5 +86,5 @@ If the user says "I rotated the API key, why is the workflow still failing?", co
 
 ## Discovery
 
-The MCP's surface for listing credentials is limited. The `n8n-extending-mcp` pattern wraps n8n's credentials API as an MCP-callable tool. Once that exists, call it to discover credentials by type. Without it, ask the user.
+Use `list_credentials({type, query, projectId, ...})` to discover credentials. Returns name, type, scopes, project (never secret values). Pair with `setNodeCredential` to bind.
 

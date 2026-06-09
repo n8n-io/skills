@@ -79,6 +79,7 @@ Tool names are shown without the MCP prefix. The qualified name is `mcp__<server
 | `search_folders` | List folders. **You cannot create or move folders.** You can only place workflows into folders that already exist. |
 | `search_projects` | List projects. |
 | `archive_workflow` / `publish_workflow` / `unpublish_workflow` | Soft-delete / activate / deactivate. Validate before publish. |
+| `search_executions` | Search executions across the instance (filter by status, workflow, time range). Use for "list recent runs" / "failures in the last hour". Single executions: `get_execution`. |
 
 ### Workflow building
 
@@ -89,8 +90,9 @@ Tool names are shown without the MCP prefix. The qualified name is `mcp__<server
 | `get_node_types` | Fetch exact TypeScript parameter definitions for node IDs. **Required before configuring any node.** Don't guess parameter names. |
 | `get_suggested_nodes` | Curated recommendations by workflow technique category. |
 | `create_workflow_from_code` | Save a workflow from SDK code. Always include a 1-2 sentence `description`. |
-| `update_workflow` | Update an existing workflow by ID with new SDK code. Replaces the entire workflow definition: no partial updates. Saves a draft only; not live until `publish_workflow` runs. |
+| `update_workflow` | Apply atomic ops to an existing workflow (max 100, all-or-nothing): node/connection CRUD, credential binding, settings, metadata. Saves a draft; needs `publish_workflow` to go live. |
 | `validate_workflow` | Validate SDK code before create/update. Necessary but **not sufficient**: won't catch the `.to()` trap. |
+| `list_credentials` | List accessible credentials (filter by type/project/etc). Returns metadata only, **never secret values**. Discover IDs before binding via `setNodeCredential`. |
 
 ### Workflow testing & execution
 
