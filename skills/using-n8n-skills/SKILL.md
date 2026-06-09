@@ -15,6 +15,14 @@ Three rules with no exceptions. Violating any produces workflows that look right
 2. **Validate AND verify before publishing.** `validate_workflow` before `publish_workflow`, and `get_workflow_details` after every create or update to check the `connections` object. Validation alone misses many issues documented in the skills that will silently break workflows.
 3. **Tokens/secrets never go in text fields.** Always use the n8n credential system. If no native node exists, configure HTTP Request with the official credential type. See `n8n-credentials-and-security`.
 
+## Lean on skills, not training data
+
+n8n evolves faster than any model's training cutoff. Parameter names drift, new MCP tools land, defaults change, patterns get deprecated. Anything you "remember" is likely wrong, often silently.
+
+Trust the skills + live MCP tools (`get_node_types`, `get_sdk_reference`, `get_workflow_best_practices`) over recollection. If a skill contradicts what you "know", trust the skill. If `get_node_types` contradicts a skill, trust the tool. Without this discipline you will ship workflows that look right and silently fail: parameter names that don't exist, renamed nodes, deprecated patterns.
+
+Unless a user preference overrides it, err on the side of loading too many skills rather than too few. Even a 3-node webhook flow typically needs `n8n-node-configuration`, `n8n-expressions`, `n8n-error-handling`, and `n8n-workflow-lifecycle`. Nothing in n8n is too small for skills.
+
 ## Strong defaults (each skill owns its exceptions)
 
 - **The Code node is a last resort.** Expression first, then arrow function inside Edit Fields, then Code. Code earns its place for multi-source aggregation, libraries, and stateful work. See `n8n-code-nodes`.
