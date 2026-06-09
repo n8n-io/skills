@@ -58,10 +58,6 @@ Before walking the per-domain list:
 
 - [ ] **Bot's own user ID not filtered out**, either via the trigger's own filter option (preferred: Slack's `options.userIds` exclusion list) or as the first node after the trigger. The bot's reply re-triggers the workflow → infinite loop. Watch out for surface-specific semantics: Telegram's `userIds` is an allowlist, not an exclusion list. → [CHAT_AGENT_PATTERNS.md](../../n8n-agents/references/CHAT_AGENT_PATTERNS.md)
 
-### ChatHub agents
-
-- [ ] **`chatHitlTool` used without `responseMode: 'responseNodes'` + a `Respond to Chat` node** after the Agent. Approval prompt never surfaces in ChatHub, tool hangs forever. (Slack/Discord/Teams/Telegram review tools don't need this, ChatHub-specific.) → [CHATHUB.md](../../n8n-agents/references/CHATHUB.md)
-
 ---
 
 ## SHOULD FIX
@@ -129,7 +125,7 @@ Before walking the per-domain list:
 - [ ] **Generic tool names (`doStuff`, `runQuery`).** Model can't tell which tool to pick, skips them or hallucinates parameters. Use verb-first specific names. → [TOOLS.md](../../n8n-agents/references/TOOLS.md)
 - [ ] **Default, Empty, or one-line tool descriptions.** Model has no clue when to invoke. Tool descriptions are part of the prompt. → [TOOLS.md](../../n8n-agents/references/TOOLS.md)
 - [ ] **`outputParserStructured` without `autoFix: true`.** One bad model output and the workflow fails. Set `autoFix: true` with a coding-capable fixer model. → [STRUCTURED_OUTPUT.md](../../n8n-agents/references/STRUCTURED_OUTPUT.md)
-- [ ] **Tools with user-visible side effects (send, pay, refund) without human review.** Wrap with `slackHitlTool` / `chatHitlTool` / `discordHitlTool` / `telegramHitlTool`. → [HUMAN_REVIEW.md](../../n8n-agents/references/HUMAN_REVIEW.md)
+- [ ] **Tools with user-visible side effects (send, pay, refund) without human review.** Wrap with `slackHitlTool` / `discordHitlTool` / `telegramHitlTool` / `gmailHitlTool` / etc. → [HUMAN_REVIEW.md](../../n8n-agents/references/HUMAN_REVIEW.md)
 - [ ] **Approval message via `fromAi()` instead of `$tool.parameters.<name>`.** Model paraphrases; you approve text not values. → [HUMAN_REVIEW.md](../../n8n-agents/references/HUMAN_REVIEW.md)
 - [ ] **Hardcoded `sessionId: 'default'` or no sessionId** on memory. All conversations share one session or sessions won't be used properly. → [MEMORY.md](../../n8n-agents/references/MEMORY.md)
 - [ ] **Image / audio / video generation wrapped in an Agent.** Binary doesn't flow through tools or the Agent's output formatter. Use the provider's native single-call node directly. → [n8n-agents anti-patterns](../../n8n-agents/SKILL.md)
@@ -208,7 +204,7 @@ The system prompt is the load-bearing config of an agent. Severity ranges by how
 - [ ] **Agent tool returning raw binary directly.** Tool output is JSON-only. Upload to storage, return key/URL in JSON. → [AGENT_TOOL_BINARY.md](../../n8n-binary-and-data/references/AGENT_TOOL_BINARY.md)
 - [ ] **Uploaded chat files passed to a tool via `fromAi`.** `fromAi` doesn't carry binary. Pre-stage to storage, inject keys in the system prompt. → [AGENT_TOOL_BINARY.md](../../n8n-binary-and-data/references/AGENT_TOOL_BINARY.md)
 - [ ] **Binary lost after a JSON transform.** Use Merge to combine the JSON output with the binary stream. → [MERGE_FOR_CONTEXT.md](../../n8n-binary-and-data/references/MERGE_FOR_CONTEXT.md)
-- [ ] **Image displayed in chat hub from raw `$binary`.** Chat hub needs a CDN URL. → [CDN_REQUIREMENT.md](../../n8n-binary-and-data/references/CDN_REQUIREMENT.md)
+- [ ] **Image sent to a chat surface from raw `$binary`.** Chat surfaces need a URL-referenced image (or platform-native file upload). → [CDN_REQUIREMENT.md](../../n8n-binary-and-data/references/CDN_REQUIREMENT.md)
 
 ### Public trigger auth
 

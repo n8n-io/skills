@@ -5,7 +5,7 @@ description: Use when handling files, images, attachments, or binary data in n8n
 
 # n8n Binary and Data
 
-n8n handles two kinds of data: JSON (in `$json`) and binary (in `$binary`), flowing side-by-side. Binary has sharp edges around agent tools, storage, and display contexts (e.g., chat hub).
+n8n handles two kinds of data: JSON (in `$json`) and binary (in `$binary`), flowing side-by-side. Binary has sharp edges around agent tools, storage, and display contexts (chat surfaces, message rendering).
 
 For tabular storage (Data Tables), see the **`n8n-data-tables`** skill.
 
@@ -98,13 +98,13 @@ A JSON-only operation (Edit Fields, Code, IF) often strips binary from the item.
 
 Merge combines the streams, and binary survives. See `references/MERGE_FOR_CONTEXT.md`.
 
-## CDN requirement for chat hub
+## CDN requirement for chat surfaces
 
-When a workflow generates an image and the user wants it in the chat UI:
+When a workflow generates an image and the user wants it embedded in a chat message (Slack, Discord, Teams, Telegram, embedded webhook chat, etc.):
 
-- **Binary on the item isn't enough.** Chat hub doesn't read `$binary`.
-- **The image must be uploaded to a CDN** referenced by URL.
-- **The user configures this CDN.** Not built into n8n.
+- **Binary on the item isn't enough.** Chat surfaces don't read `$binary`; they render messages that reference images by URL (or via platform-specific file upload APIs).
+- **The image must live somewhere a URL can fetch.** Upload to a CDN or object store first.
+- **The user configures this storage.** Not built into n8n.
 
 Common options span object storage (S3, R2, GCS, Azure Blob, Vercel Blob, Supabase Storage) and drive-style services (Dropbox, Google Drive, OneDrive, Box). Ask the user what they use rather than defaulting to S3.
 
@@ -121,7 +121,7 @@ For Data Tables, see the **`n8n-data-tables`** skill. Distinct surface with its 
 | `references/BINARY_BASICS.md` | First time handling binary, or reading/writing the `$binary` slot |
 | `references/AGENT_TOOL_BINARY.md` | Agent tool needs a user-uploaded file, or produces a file (the boundary in either direction) |
 | `references/MERGE_FOR_CONTEXT.md` | Binary disappears after a JSON transform and needs to re-attach |
-| `references/CDN_REQUIREMENT.md` | Showing images in chat hub or other places that need URL-referenced images |
+| `references/CDN_REQUIREMENT.md` | Showing images in a chat surface or other places that need URL-referenced images |
 
 ## Anti-patterns
 
@@ -132,6 +132,6 @@ For Data Tables, see the **`n8n-data-tables`** skill. Distinct surface with its 
 | Trying to pass uploaded chat files into a tool via `fromAi` | `fromAi` doesn't carry binary, so the tool gets nothing | Pre-stage uploads to storage, inject keys in the system prompt, and have the tool download by key |
 | Setting `passthroughBinaryImages: true` and assuming tools can now see the file | The flag only affects what the LLM sees, not what tools receive | Still need the upload-and-pass-key pattern for tools |
 | Losing binary after a JSON transform | The transform's output item doesn't have binary | Use Merge to combine the JSON output with the binary stream |
-| Storing image in n8n binary and expecting chat hub to display | Chat hub needs URL-accessible images, not raw binary | Upload to CDN, embed URL in response |
+| Storing image in n8n binary and expecting a chat surface to display | Chat surfaces need URL-accessible images (or a platform-native file upload), not raw `$binary` | Upload to CDN, embed URL or use the platform's file API |
 | Hardcoding binary base64 in a Code node | Massive workflow JSON, slow, leaky | Reference binary via `$binary` properly, or upload to storage and reference by URL |
 

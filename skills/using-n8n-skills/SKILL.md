@@ -60,7 +60,7 @@ Invoke via the Skill tool. Trigger column = when to invoke.
 | `n8n-agents` | LangChain Agent node, tool calling, system prompts, structured output, memory, RAG. Tool names/descriptions as part of the prompt, sub-workflow as tool, modular prompt design |
 | `n8n-error-handling` | Webhook-triggered or production-bound workflows. Error branch on every fallible node, 4xx for caller errors and 5xx for execution errors |
 | `n8n-credentials-and-security` | Any auth, API key, or token mention. Credential system, custom credentials, HTTP Request with official creds |
-| `n8n-binary-and-data` | Files, images, attachments. Binary handling patterns, agent-tool boundary, CDN requirement for chat hub |
+| `n8n-binary-and-data` | Files, images, attachments. Binary handling patterns, agent-tool boundary, CDN requirement for chat surfaces |
 | `n8n-data-tables` | Data Tables: schemas, default columns (id/createdAt/updatedAt), no-FK relational design, dedup, the no-JSON-only-primitives rule, the SDK-vs-UI manual-mapping quirk |
 | `n8n-debugging` | Errors, unexpected behavior, "this isn't working". Believe the user, check parameters, fetch n8n source from GitHub |
 

@@ -133,13 +133,13 @@ The one place duration actually matters: **the HTTP Request node has its own HTT
 
 ## Surface-specific seams: look up the platform's API docs
 
-The examples in this ref use n8n's ChatHub conventions: `$('Chat Trigger').first().json.files[]` on the way in, markdown image rendering (`![]()`) on the way out. **These shapes are ChatHub's, not universal.** Each chat surface (Slack, Discord, Microsoft Teams, Telegram, WhatsApp Business, custom webhooks, etc.) has its own:
+The examples in this ref use n8n Chat Trigger conventions: `$('Chat Trigger').first().json.files[]` on the way in, markdown image rendering (`![]()`) on the way out. **These shapes aren't universal.** Production chat surfaces (Slack, Discord, Microsoft Teams, Telegram, WhatsApp Business, custom webhooks, etc.) each have their own:
 
 - **Inbound file event shape.** Field names, where the file lives in the trigger payload, whether the URLs are public or require a bearer token to download.
 - **Outbound rendering mechanism.** Some platforms render markdown image syntax, many don't. Block-style messages (Slack Block Kit, Teams adaptive cards, Discord embeds) have their own image element shapes. Some platforms have a dedicated file-upload API that pushes binary natively rather than embedding by URL.
-- **Auth patterns** for file download. ChatHub URLs are usually directly fetchable, but many platforms gate file URLs behind a bot or app token.
+- **Auth patterns** for file download. Canvas Chat Trigger URLs are usually directly fetchable, but third-party platforms gate file URLs behind a bot or app token.
 
-Don't guess from the ChatHub examples. Before wiring an inbound or outbound binary path on a non-ChatHub surface, **look up the platform's official API docs and the n8n node's docs for that platform**. Use WebSearch or WebFetch if you need to. Two specific things to check:
+Don't guess from the canvas examples. Before wiring an inbound or outbound binary path on a production surface, **look up the platform's official API docs and the n8n node's docs for that platform**. Use WebSearch or WebFetch if you need to. Two specific things to check:
 
 1. The exact path to the file metadata in the trigger event payload, and whether downloading the URL needs auth headers.
 2. The exact shape the platform expects for an image / file in a reply (markdown? a JSON block? a separate upload call?).
@@ -196,7 +196,7 @@ For VIDEOS, share as a plain markdown link, NOT a video embed:
 [Descriptive video title](https://videourl.com)
 ```
 
-**Image vs video display matters, and rendering is surface-specific.** The `![]()` markdown above is ChatHub's syntax. Other surfaces use Block Kit image blocks, adaptive cards, embeds, or native file uploads (see the "Surface-specific seams" section above). Whatever the surface, video is the harder case: video embeds often don't render reliably (ChatHub at this writing doesn't display them), and a plain link is the path that works everywhere. Tell the agent explicitly in the system prompt for *its* surface. Otherwise it copies the image pattern for video and the user sees a broken thumbnail.
+**Image vs video display matters, and rendering is surface-specific.** The `![]()` markdown above is the canvas Chat Trigger's syntax. Production surfaces use Block Kit image blocks, adaptive cards, embeds, or native file uploads (see the "Surface-specific seams" section above). Whatever the surface, video is the harder case: video embeds often don't render reliably, and a plain link is the path that works everywhere. Tell the agent explicitly in the system prompt for *its* surface. Otherwise it copies the image pattern for video and the user sees a broken thumbnail.
 
 ### When you don't need this
 
