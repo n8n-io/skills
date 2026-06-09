@@ -8,6 +8,8 @@ Run before every `publish_workflow`. The whole list. Skipping items is how broke
 
 Run `validate_workflow`. Schema and shape errors must be zero. If validation fails, fix and re-validate.
 
+If a failure points at a single node's params, `validate_node_config` on that node alone returns per-parameter errors without full-graph noise. For tool subnodes, set `isToolNode: true`. Best used as a per-node spot-check during BUILD.
+
 ### 2. Antipattern scan (the build-time discipline check)
 
 Walk the workflow with these questions in mind. These are patterns that recur across builds even when relevant skills are loaded, so making this explicit catches them.

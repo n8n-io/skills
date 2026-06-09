@@ -51,6 +51,12 @@ Compare returned shape vs. workflow parameters. Renames, restructuring, or major
 
 Most nodes have `(resource, operation)` pairs that change parameter shape. **Always pass discriminators** to `get_node_types`. Otherwise the generic shape may miss operation-specific fields.
 
+## Shortcut: run all four checks at once
+
+`validate_node_config([{ type, typeVersion, parameters, isToolNode? }])` runs the same Zod schema as `validate_workflow` on a single node config. Returns `{ path, message }` per failure: missing required fields, wrong types, dependent params without their parent. Useful when shape-vs-config diffing is slow (deep params, nested displayOptions, AI tool subnodes). For tool subnodes, set `isToolNode: true`.
+
+Schema-level only: doesn't catch connection bugs, missing credentials, or runtime data issues.
+
 ## Credential checks
 
 For auth errors:

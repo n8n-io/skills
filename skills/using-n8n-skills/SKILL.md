@@ -86,12 +86,13 @@ Tool names are shown without the MCP prefix. The qualified name is `mcp__<server
 | Tool | What it does |
 |---|---|
 | `get_sdk_reference` | Fetch the n8n Workflow SDK reference. **Read this before writing workflow code.** Sections include `guidelines` and `design`. |
+| `get_workflow_best_practices` | Fetch best-practices for a workflow technique. Call once per technique before searching nodes. `technique: "list"` discovers what's available. |
 | `search_nodes` | Discover nodes by capability (e.g. "gmail", "slack", "schedule trigger"). Returns IDs plus discriminators (resource/operation/mode). |
 | `get_node_types` | Fetch exact TypeScript parameter definitions for node IDs. **Required before configuring any node.** Don't guess parameter names. |
-| `get_suggested_nodes` | Curated recommendations by workflow technique category. |
 | `create_workflow_from_code` | Save a workflow from SDK code. Always include a 1-2 sentence `description`. |
 | `update_workflow` | Apply atomic ops to an existing workflow (max 100, all-or-nothing): node/connection CRUD, credential binding, settings, metadata. Saves a draft; needs `publish_workflow` to go live. |
-| `validate_workflow` | Validate SDK code before create/update. Necessary but **not sufficient**: won't catch the `.to()` trap. |
+| `validate_node_config` | Schema-only validation of node configs (1-50 per call). Per-parameter errors, no graph noise. Side-channel for iteration/debug; `validate_workflow` still gates publish. For ai_tool subnodes set `isToolNode: true`. |
+| `validate_workflow` | Validate full SDK code before create/update. Necessary but **not sufficient**: doesn't catch all wiring traps (`.to()`, merge index). |
 | `list_credentials` | List accessible credentials (filter by type/project/etc). Returns metadata only, **never secret values**. Discover IDs before binding via `setNodeCredential`. |
 
 ### Workflow testing & execution
