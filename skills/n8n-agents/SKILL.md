@@ -70,7 +70,7 @@ The four sub-node slots:
 
 Different triggers shape the input differently:
 
-- **Chat Trigger (`@n8n/n8n-nodes-langchain.chatTrigger`)** with `availableInChat: true`: allows easy on canvas chat testing and powers the n8n ChatHub. Input is `{ chatInput, sessionId, files[] }`. `sessionId` is what memory keys on, so pass it through wherever conversation continuity is needed. Files come in via `files[]`, see binary section below. ChatHub-specific config (response modes, agent types, chat-only user role) in `references/CHATHUB.md`.
+- **Chat Trigger (`@n8n/n8n-nodes-langchain.chatTrigger`)** with `availableInChat: true`: powers the canvas chat tester so you can poke at an agent while building it. Input is `{ chatInput, sessionId, files[] }`. `sessionId` is what memory keys on, so pass it through wherever conversation continuity is needed. Files come in via `files[]`, see binary section below. Not a production surface, use Slack / Discord / Teams / Telegram / webhook for that.
 - **Webhook**: arbitrary input shape, no session by default. Manage continuity by passing a session/conversation ID through the request body and forwarding it to the memory node.
 <!-- TEMPORARY: update below this to include a link to the new agent paradigm when it is released -->
 - **External chat surface (Slack, Discord, Teams, Telegram)**: every chat-triggered workflow that posts replies MUST filter out the bot's own user ID, or it loops forever potentially crashing n8n. Prefer trigger-level filtering when the surface supports it (Slack's `options.userIds` is an exclusion list); otherwise filter in the first node after the trigger. Semantics differ per surface, see `references/CHAT_AGENT_PATTERNS.md`. Beyond the anti-loop filter, a simple bot (trigger → agent → reply) is fine in one workflow. Split into a "shell" workflow + agent-core sub-workflow once you need loading UX, sub-agents, reuse across surfaces, or robust error handling.
@@ -118,7 +118,7 @@ See `references/TOOLS.md` for deeper guidance on each option and how to wire `fr
 
 Before adding or skipping human review on a tool, check with the user. Whether sign-off is needed is a product / policy call (blast radius, audit requirements, how much they trust the model) that the user is better positioned to make than you. Surface the question, recommend based on the criteria below, and let them decide.
 
-When a tool's effects need human approval before execution (sends, payments, refunds, account changes, customer-facing actions), wrap it with a review tool node: `slackHitlTool`, `chatHitlTool`, `discordHitlTool`, `telegramHitlTool`, etc. (n8n's node names use `Hitl` for the human-in-the-loop pattern, and "human review" is what it's called in the UI.) The review node sits between the wrapped tool and the agent on the `ai_tool` connection: the wrapped tool's `ai_tool` output wires into the review node, and the review node's `ai_tool` output wires into the Agent. The agent calls through, the review node pauses for approval, on approve, the wrapped tool runs.
+When a tool's effects need human approval before execution (sends, payments, refunds, account changes, customer-facing actions), wrap it with a review tool node: `slackHitlTool`, `discordHitlTool`, `telegramHitlTool`, `gmailHitlTool`, etc. (n8n's node names use `Hitl` for the human-in-the-loop pattern, and "human review" is what it's called in the UI.) The review node sits between the wrapped tool and the agent on the `ai_tool` connection: the wrapped tool's `ai_tool` output wires into the review node, and the review node's `ai_tool` output wires into the Agent. The agent calls through, the review node pauses for approval, on approve, the wrapped tool runs.
 
 Default to / recommend human review when:
 
@@ -191,8 +191,7 @@ This skill keeps RAG opinions thin on purpose. See `references/RAG.md` for more 
 | `references/MEMORY.md` | Choosing a memory type, persistence and sessionId handling |
 | `references/RAG.md` | Building retrieval-augmented agents, intentionally a stub |
 | `references/HUMAN_REVIEW.md` | Adding human approval to a tool, configuring approval messages, multi-channel approver patterns |
-| `references/CHATHUB.md` | Building or debugging an agent for n8n's ChatHub, response modes, chat-only user role |
-| `references/CHAT_AGENT_PATTERNS.md` | Building a chat agent on Slack, Discord, Teams, or any non-ChatHub surface, multi-workflow shell + core + sub-agents topology |
+| `references/CHAT_AGENT_PATTERNS.md` | Building a chat agent on Slack, Discord, Teams, Telegram, or any custom chat surface, multi-workflow shell + core + sub-agents topology |
 
 ## Anti-patterns
 
@@ -211,7 +210,6 @@ This skill keeps RAG opinions thin on purpose. See `references/RAG.md` for more 
 | Reaching for Agent + Switch to route on natural-language input | Two nodes plus prompt boilerplate where Text Classifier is one node with N built-in output branches | Use Text Classifier (`@n8n/n8n-nodes-langchain.textClassifier`), each category gets its own output handle, wire downstream paths directly |
 | Tool that mutates user-visible state (send, pay, refund) without human review | Agent fires irreversible action on a wrong inference | Wrap with the review tool node that fits the channel (Slack/Chat/Discord/Telegram), show actual params via `$tool.parameters` |
 | Filling the review approval message via `fromAi()` | The model paraphrases, you approve text not values | Use `$tool.parameters.<name>` directly so the literal call is visible |
-| **ChatHub only:** `chatHitlTool` without `responseMode: 'responseNodes'` AND a `Respond to Chat` node after the Agent | Approval prompt never surfaces in ChatHub, tool hangs forever | Both are required for `chatHitlTool` to work. The Slack / Discord / Teams / Telegram review tools (`slackHitlTool`, `discordHitlTool`, etc.) don't need this. The rule is ChatHub-specific. |
 | Chat-triggered agent workflow that posts replies without filtering out the bot's own user ID | Bot's own messages re-trigger the workflow, infinite loop that burns runs and tokens until rate limits or n8n concurrency stops it | Prefer trigger-level filtering when available (Slack Trigger's `options.userIds` is an exclusion list, put the bot ID there). Otherwise filter on `$json.user !== '<BOT_USER_ID>'` (or the surface equivalent) as the first node after the trigger. Required for ANY chat-triggered workflow that sends a reply (Slack, Discord, Teams, Telegram), regardless of complexity. See `references/CHAT_AGENT_PATTERNS.md` for per-surface semantics |
 | Passing the bare blocks array to the Slack node's `blocksUi` when the agent returns Block Kit | The Slack node accepts the input silently and posts the message with no rich content; no error, no warning | Wrap as `{ "blocks": [...] }` with the value as a real array, not a stringified one. Expression: `={{ { "blocks": $('Agent').item.json.output.blocks } }}`. See `n8n-node-configuration` `references/COMMS_NODES.md` "Block Kit messages" |
 

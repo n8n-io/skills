@@ -1,6 +1,6 @@
 ---
 name: n8n-extending-mcp
-description: Use when you want to expose an n8n workflow as a tool the coding agent can call. Two cases. (1) Wrap n8n API capabilities the MCP doesn't natively expose: listing credentials, querying executions across the instance, fetching instance metadata, anything programmatic the MCP doesn't surface. (2) Expose a general-purpose workflow as an agent tool: a workflow that calls a third-party API, runs business logic, or does any task you want the agent to invoke. Triggers on "expose as MCP tool", "build a tool for my agent", "I need to know X" where X isn't an MCP tool, "list all my credentials", "show recent executions", or any capability gap.
+description: Use when you want to expose an n8n workflow as a tool the coding agent can call. Two cases. (1) Wrap n8n API capabilities the MCP doesn't natively expose: folder CRUD, tag CRUD, instance metadata, credential creation. (2) Expose a general-purpose workflow as an agent tool: a workflow that calls a third-party API, runs business logic, or does any task you want the agent to invoke. Triggers on "expose as MCP tool", "build a tool for my agent", "I need to know X" where X isn't an MCP tool, "create folder", "create tag", or any capability gap.
 ---
 
 <!-- TEMPORARY: update whenever n8n mcp capacities are added. a lot of listed functionalities missing are coming soon -->
@@ -8,7 +8,7 @@ description: Use when you want to expose an n8n workflow as a tool the coding ag
 
 Any n8n workflow with MCP access enabled becomes a tool the coding agent can call by name. Two common cases:
 
-1. **Wrap n8n capabilities the MCP doesn't expose.** The MCP exposes a fixed set of tools (workflow CRUD, validation, execution, data tables). Listing credentials, querying executions across the instance, fetching instance metadata, and other admin-style operations are limited or absent. Build a workflow that hits the n8n API and exposes the result as an agent tool.
+1. **Wrap n8n capabilities the MCP doesn't expose.** The MCP covers workflow CRUD, validation, execution, data tables, credential listing, execution search, folder/project listing. Still missing: folder CRUD, tag CRUD, instance metadata, credential creation. Build a workflow that hits the n8n API and exposes the result as an agent tool.
 2. **Expose a general-purpose workflow as a tool.** A workflow that has nothing to do with n8n itself (calls a third-party API, runs internal business logic, looks something up in a private system) can be MCP-callable. Lets the agent invoke real operations during a coding session.
 
 The MCP calls your workflow as if it were a native tool: input from the `Execute Workflow Trigger`, output from the workflow's last node.
@@ -17,9 +17,10 @@ The MCP calls your workflow as if it were a native tool: input from the `Execute
 
 Case 1 (wrap n8n capability):
 
-- Listing credentials of a particular type (so you can pick the right one when configuring a node).
-- Listing recent executions across the instance (e.g., "show me failures in the last hour").
-- Looking up instance metadata (limits, plan info, configured integrations).
+- Folder CRUD (create, rename, move, delete): REST API exists, no MCP tool yet.
+- Tag CRUD (create, list, get, delete): REST API exists, no MCP tool yet.
+- Instance metadata (limits, plan info, configured integrations): no MCP tool.
+- Credential creation: REST API exists (`POST /credentials`), no MCP tool yet.
 - Any n8n API operation the MCP doesn't natively expose.
 
 Case 2 (general agent tool):
@@ -70,27 +71,17 @@ Most common patterns, by usefulness. Case 2 (general agent tools) is whatever yo
 
 > **n8n REST API reference:** https://docs.n8n.io/api/api-reference/. Start here for any case-1 wrap. Find the endpoint, then wrap it with an HTTP Request node + `n8nApi` credential. Self-hosted instances expose this at `<instance-url>/api/v1/`.
 
-### 1. Credentials list
+### 1. Folder management
 
-Most common ask. The MCP doesn't expose "list credentials," so configuring an auth-needing node means asking the user every time. A wrapper hitting `GET /credentials` solves this.
-
-```
-Tool: list available credentials
-Input: { type?: string }   # optional filter by credential type
-Output: [{ id, name, type }, ...]
-```
-
-### 2. Executions list
-
-`get_execution` exists (single, by ID), but not "list across the instance." For "show me recent failures" questions, a wrapper helps.
+The MCP can place workflows into existing folders but can't create, rename, move, or delete them. n8n's REST API has a [Folders endpoint](https://docs.n8n.io/api/api-reference/#tag/folders), so a one-time wrap solves this for users who organize folders frequently.
 
 ```
-Tool: list recent executions
-Input: { limit?: number, status?: string, workflowId?: string }
-Output: [{ id, workflowId, workflowName, status, startedAt, finishedAt }, ...]
+Tool: create folder
+Input: { projectId: string, name: string, parentFolderId?: string }
+Output: { id, name, projectId, parentFolderId? }
 ```
 
-### 3. Instance metadata
+### 2. Instance metadata
 
 Version, configured integrations, environment info. Useful for the SessionStart drift check or adapting workflows to instance capabilities.
 
@@ -98,16 +89,6 @@ Version, configured integrations, environment info. Useful for the SessionStart 
 Tool: get instance info
 Input: {}
 Output: { version, edition, integrations: [...], limits: {...} }
-```
-
-### 4. Folder management
-
-The MCP can place workflows into existing folders but can't create, rename, move, or delete them. n8n's REST API has a Folders endpoint (https://docs.n8n.io/api/api-reference/#tag/folders), so a one-time wrap solves this for users who organize folders frequently. Especially worthwhile for projects that build many workflows in batches.
-
-```
-Tool: create folder
-Input: { projectId: string, name: string, parentFolderId?: string }
-Output: { id, name, projectId, parentFolderId? }
 ```
 
 

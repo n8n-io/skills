@@ -8,7 +8,7 @@ description: Use when starting, designing, organizing, finishing, or shipping an
 ## The six stages
 
 1. **PLAN.** Gather requirements, ask clarifying questions, search for existing workflows / sub-workflows that already do this.
-2. **BUILD.** Write SDK code (with skills: subworkflows, node-config, expressions, code-nodes; readability section below).
+2. **BUILD.** Write SDK code (with skills: subworkflows, node-config, expressions, code-nodes; readability section below). Use `validate_node_config` as a side-channel for iteration, debugging, or small single-node edits: clean per-parameter errors without full-graph noise. Not a replacement for `validate_workflow` in VALIDATE.
 3. **VALIDATE.** `validate_workflow` + `get_workflow_details` for connections, then have the user verify per-node credentials and create anything you couldn't (missing credentials, folders, etc).
 4. **TEST.** `test_workflow` with `prepare_test_pin_data`; iterate until output matches intent.
 5. **PUBLISH.** `publish_workflow` only after stages 3 and 4 are clean.
@@ -22,7 +22,7 @@ Skipping a stage produces workflows that look done but break in production, or s
 
 ## Non-negotiables
 
-1. **Validate AND verify before publish.** Run `validate_workflow` on the SDK code, then `get_workflow_details` after every create/update to check the `connections` object. Validation alone misses silently dropped wires.
+1. **Validate AND verify before publish.** Run `validate_workflow` on the SDK code, then `get_workflow_details` after every create/update to check the `connections` object. Validation alone misses silently dropped wires. `validate_node_config` is a separate per-node iteration tool, not a replacement for this step.
 2. **Surface known limitations to the user.** If folders, MCP access, or any other limitation blocks the request, say so explicitly and propose a path. Don't silently dump workflows at the wrong location or report success on a request you couldn't fully fulfill.
 3. **Ask before testing when not-auto-pinned downstreams have side effects.** `test_workflow` auto-pins triggers, credentialed nodes, and HTTP Request nodes. Everything else (Code, Edit Fields, If, Wait, Execute Command, file ops, sub-workflow calls, Data Tables) runs for real. Ask the user before running if any of those would fire user-visible side effects. See `references/TESTING.md`.
 
@@ -44,12 +44,24 @@ Skipping a stage produces workflows that look done but break in production, or s
 Validation is necessary but not sufficient. The real gate is:
 
 1. `validate_workflow` passes.
-2. `get_workflow_details` returns a `connections` object that matches your intent (see `n8n-connections` and its `VERIFICATION.md`).
+2. `get_workflow_details` returns a `connections` object that matches your intent.
 3. `test_workflow` produces the right output on representative pinned data.
 
 Only then call `publish_workflow`.
 
 For the full pre-publish checklist, see `references/VALIDATION_CHECKLIST.md`.
+
+## Execution model
+
+n8n workflows execute **sequentially, left-to-right, top-to-bottom**. Branches that visually appear parallel on the canvas (fan-out from one source to multiple downstreams) run one after the other, ordered by the target nodes' Y-position on the canvas. There is no automatic concurrency.
+
+Practical consequences:
+
+- A fan-out to three slow HTTP calls runs in series; total latency is the sum, not the max.
+- "Parallel" branches share workflow state in execution order; downstream consumers see whatever the last branch left.
+- For real concurrency, dispatch sub-workflows with `mode: 'each'` and `waitForSubWorkflow: false`. See `n8n-loops` and `n8n-subworkflows`.
+
+This is platform behavior, not an SDK quirk. Don't design fan-outs around assumed parallelism.
 
 ## Naming conventions
 
@@ -146,7 +158,6 @@ Keep it tight: half a dozen bullets, not a wall of text. The user shouldn't have
 | Anti-pattern | What goes wrong | Fix |
 |---|---|---|
 | Calling `publish_workflow` without validating | Broken workflows reach production | Validate, verify connections, then test |
-| Skipping `get_workflow_details` after create | Silent connection bugs ship | Always pull the workflow back. See `n8n-connections` |
 | Creating workflows at root because the requested folder doesn't exist | Workflows get lost, and the user has to drag them manually | Surface the limitation *before* building |
 | Generic node names (`HTTP Request1`, `Set2`) | Workflows are unreadable a month later | Rename to describe the action |
 | Missing `description` on `create_workflow_from_code` | Workflow invisible in search, no context for maintainers | Always include 1-2 sentences |

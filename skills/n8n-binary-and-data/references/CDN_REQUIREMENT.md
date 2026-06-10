@@ -1,27 +1,27 @@
-# CDN requirement for chat hub images
+# CDN requirement for chat-surface images
 
-When a workflow generates an image and the user wants it in n8n chat hub / chatbot UI:
+When a workflow generates an image and the user wants it shown in a chat message (Slack, Discord, Teams, Telegram, embedded webhook chat, etc.):
 
-**Image in `$binary` isn't enough.** Chat UI doesn't render binary directly. The image must be uploaded to a CDN referenced by URL.
+**Image in `$binary` isn't enough.** Chat surfaces don't render raw binary. Either upload to a CDN/object store and embed by URL, or push the bytes via the platform's file-upload API.
 
-The user must configure this. n8n doesn't bundle a CDN.
+The user must provide the storage. n8n doesn't bundle a CDN.
 
 ## Why
 
-Chat hub renders messages as HTML/JSON. Embedded images reference URLs:
+Chat messages render as HTML/JSON. Embedded images reference URLs:
 
 ```html
 <img src="https://cdn.example.com/img/abc123.png">
 ```
 
-No way to embed binary directly at scale. Bytes must live where the client can fetch via HTTPS.
+Some surfaces (Slack's `files.getUploadURLExternal` + `files.completeUploadExternal` two-step, Discord attachments, Telegram `sendPhoto`) accept binary directly via the platform's file API. Either way, the bytes have to live somewhere the chat client can fetch over HTTPS.
 
 ## What the user needs
 
 A publicly-accessible URL for the image. Ask the user what they have today, but lead with the recommendation:
 
 1. **Recommended: a real CDN / object storage service.** Cloudflare R2 (`https://pub-xxxxx.r2.dev/<key>`), AWS S3 + CloudFront (`https://d1234.cloudfront.net/<key>`), Google Cloud Storage, Azure Blob, Backblaze B2, Vercel Blob, Supabase Storage, Bunny CDN. Direct URL embedding works once the bucket or object is public, latency is low because of edge caching, and signed-URL flows are first-class. R2 is the lowest-friction starting point if they don't have anything (~10 minutes, generous free tier, no egress fees).
-2. **Drive-style services (fallback):** Dropbox, Google Drive, OneDrive, Box. These can produce shareable links, but the URL shape and rendering behavior in chat hub vary, and some require explicitly converting share links to direct-download URLs before they'll embed. Confirm with the user that their service can serve a `<img src="...">`-renderable URL before committing.
+2. **Drive-style services (fallback):** Dropbox, Google Drive, OneDrive, Box. These can produce shareable links, but the URL shape and chat-surface rendering behavior vary, and some require explicitly converting share links to direct-download URLs before they'll embed. Confirm with the user that their service can serve a `<img src="...">`-renderable URL before committing.
 3. **Self-hosted:** user serves from their own domain. Fine if it's already there, but don't propose standing one up just for this.
 
 Choice depends on existing infrastructure, costs, and security needs.
@@ -29,7 +29,7 @@ Choice depends on existing infrastructure, costs, and security needs.
 ## What the workflow does
 
 ```
-[Generate image] → [Upload to CDN] → [Set: image_url = response URL] → [Respond with image_url in chat message]
+[Generate image] → [Upload to CDN] → [Set: image_url = response URL] → [Send chat reply referencing image_url]
 ```
 
 Concretely, with Cloudflare R2:
@@ -45,14 +45,14 @@ Concretely, with Cloudflare R2:
   ↓
 [Set: { image_url: 'https://pub-<id>.r2.dev/<key>' }]
   ↓
-[Respond to chat: { type: 'image', url: $json.image_url }]
+[Send to chat surface: image_url embedded in the message (markdown, Block Kit image block, adaptive card, etc.)]
 ```
 
 Upload mechanics depend on the provider. Most expose S3-compatible APIs usable via n8n's S3 node or HTTP Request with AWS auth.
 
 ## Telling the user
 
-> "I'll generate the image, but chat can't display raw binary. I'll need to upload it somewhere that serves a public URL. What do you use for image / file storage today (R2, S3, GCS, Dropbox, Google Drive, etc.)? If you don't have anything set up, Cloudflare R2 is the lowest-friction starting point (~10 minutes)."
+> "I'll generate the image, but the chat surface can't display raw binary. I'll need to upload it somewhere that serves a public URL. What do you use for image / file storage today (R2, S3, GCS, Dropbox, Google Drive, etc.)? If you don't have anything set up, Cloudflare R2 is the lowest-friction starting point (~10 minutes)."
 
 If they don't have storage set up, there's no fallback that hides the requirement: n8n doesn't host the file for them. Pause until they pick a service and provision a bucket / credentials, then resume. Don't quietly ship a workflow that generates images "but they don't display."
 
@@ -63,7 +63,7 @@ Once storage is in place, posting the URL as a link instead of an embedded image
 - **Public URL**: easy, anyone with the URL can access. Use for non-sensitive content.
 - **Signed URL with expiration**: per-request, expires (e.g., 1 hour). Use for sensitive content.
 
-For chat hub, public is usually fine, since URLs are buried in messages only specific users see. For compliance-sensitive content, default to signed URLs.
+For internal chat surfaces with scoped channels, public is usually fine, since URLs are buried in messages only specific users see. For compliance-sensitive content, default to signed URLs.
 
 ## File naming
 

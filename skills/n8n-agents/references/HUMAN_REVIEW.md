@@ -2,11 +2,7 @@
 
 Human review gates a tool behind explicit human approval. Without approval, the wrapped tool does not run, regardless of how confident the agent is. The default safety pattern for any agent tool with user-visible side effects.
 
-n8n docs and node names use **HITL**, **human-in-the-loop**, and **Human Review** for the same concept, and the review tool nodes are named accordingly (`slackHitlTool`, `chatHitlTool`, etc.).
-
-<!-- TEMPORARY: get_node_types fails on HITL tool node IDs. Reproduced on n8n 2.18.x and 2.19.0. -->
-
-> **MCP gotcha (n8n 2.18.x and 2.19.0):** `get_node_types` returns `Node type 'X' not found` for every HITL variant. **This is the one exception to the always-`get_node_types`-before-configuring rule.** Use the parameter shapes documented in this reference instead. For anything not covered here, either build a one-node test workflow and inspect the saved JSON via `get_workflow_details`, or call `get_node_types` on the underlying base node (e.g., `n8n-nodes-base.slackTool` for `slackHitlTool`) for parameter shape only. The base node uses `main` connections, while HITL uses the `subnodes.tools` wrapping pattern in the Topology section. Confirm HITL node IDs themselves with `search_nodes({ queries: ['hitl'] })`.
+n8n docs and node names use **HITL**, **human-in-the-loop**, and **Human Review** for the same concept, and the review tool nodes are named accordingly (`slackHitlTool`, `discordHitlTool`, etc.).
 
 ## Topology
 
@@ -78,7 +74,6 @@ Skip review when the tool is read-only, idempotent and cheap to undo, or when th
 
 | Node | When to use |
 |---|---|
-| `@n8n/n8n-nodes-langchain.chatHitlTool` | The approver IS the chatter, on n8n ChatHub or another chat surface that supports `responseNodes` mode |
 | `n8n-nodes-base.slackHitlTool` | Approver is on Slack (multi-channel pattern: chatter elsewhere, support staff approves in Slack) |
 | `n8n-nodes-base.discordHitlTool` | Approver is on Discord |
 | `n8n-nodes-base.telegramHitlTool` | Approver is on Telegram |
@@ -96,7 +91,7 @@ More platforms are added over time. Verify what's available on the target instan
 - **`approval`**: button-based approve / disapprove. Sub-configured via `approvalOptions.values.approvalType`:
   - `'single'` (the default): one button (Approve only). Use when disapproval isn't a meaningful choice. The approver either acts or ignores.
   - `'double'`: two buttons (Approve / Disapprove). For actions where Disapprove needs to be a loud, recordable choice.
-- **`freeText`** (Slack / Discord / Telegram / Gmail / etc.) or **`freeTextChat`** (chatHitlTool): the human types a free-form response. Useful when the agent is genuinely asking a question and any answer is valid.
+- **`freeText`** (Slack / Discord / Telegram / Gmail / etc.): the human types a free-form response. Useful when the agent is genuinely asking a question and any answer is valid.
 - **`customForm`** (every variant): a multi-field form supporting text, dropdown, radio, checkbox, and file inputs. The human fills in the form before the wrapped tool runs with those values. **This is the practical answer to "editable parameters"**: define a form whose fields match the wrapped tool's parameters and the human can override what the agent picked.
 
 A two-button "semantic choice" (e.g., "Schedule for today" / "Schedule for tomorrow") is NOT a separate response type. Use `responseType: 'approval'` with `approvalType: 'double'` and customize `approveLabel` / `disapproveLabel`.
@@ -167,25 +162,6 @@ A button that says "Approve $50 refund" is unambiguous. A button that says "Appr
 
 `slackHitlTool` also exposes `buttonApprovalStyle` and `buttonDisapprovalStyle` (`'primary' | 'secondary'`) for visual emphasis on Slack's button styling.
 
-## ChatHub specifics: response mode + Respond to Chat node
-
-`chatHitlTool` runs in the agent's tool dispatch path, but the approval message has to surface to the user via the chat surface. With ChatHub, that means:
-
-1. **Chat trigger's `responseMode` set to `responseNodes`** (NOT `streaming`, which is the default when `availableInChat: true`).
-2. **A `Respond to Chat` node (`@n8n/n8n-nodes-langchain.chat`) wired after the Agent**, with the agent's output as input.
-
-Without (1), the chat trigger doesn't expect downstream chat-shaped responses and the review tool has nowhere to send its approval prompt. Without (2), the agent's output (and therefore the review prompt) never gets back to the chat UI. Either omission and the tool hangs.
-
-This applies only to `chatHitlTool`. Slack, Discord, Telegram, and email review tools deliver their approval prompts via their own platform integrations and don't require this wiring.
-
-### Default behavior: chatting auto-declines the pending approval
-
-By default with `chatHitlTool`, if the user sends a regular chat message while a HITL prompt is pending, that message auto-declines the approval and is passed back to the agent as the next turn's input. This is often the right UX: the user can "decline with changes" by just saying what they actually want ("no, do it for $40 instead"), and the agent re-plans without needing a separate decline button or an editable form.
-
-`chatHitlTool` exposes `blockUserInput: boolean` (only when `responseType: 'approval'`) to disable this. With it on, the chat input is locked until the approval resolves, so the user can't keep talking past a still-unapproved tool call. Use it when the proposed action either succeeds as-is or the turn is invalid. Leave it off when natural conversation should be able to override the proposal.
-
-See `CHATHUB.md` for the broader ChatHub setup.
-
 ## Multi-channel pattern: approver isn't the chatter
 
 A common production pattern: customer chats with an agent on a website (or via email, order trigger, form submission), and support staff approves sensitive actions in Slack.
@@ -219,5 +195,4 @@ Don't try to build editable approvals on top of the `approval` response type. Th
 | Tool that mutates user-visible state without human review | Agent fires irreversible action on a wrong inference | Wrap with the right review tool node |
 | Approval message via `fromAi()` | You approve a paraphrase, not the literal call | Use `$tool.parameters.<name>` |
 | "Approve" button with no context in the label | Approver clicks without seeing what they're approving | Embed actual values: `Approve {{ $tool.parameters.amount }}` |
-| `chatHitlTool` without `responseMode: 'responseNodes'` | Approval never surfaces, tool hangs | Set responseMode AND add Respond to Chat node |
 | Review on a channel the approver doesn't actively monitor | Tool sits indefinitely, executions pile up | Pick a channel approvers watch, consider TTL / fallback patterns |

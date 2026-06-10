@@ -1,6 +1,6 @@
 ---
 name: n8n-loops
-description: Use when working with multi-item data, batches, paginated APIs, rate-limited APIs, anything that needs to "do this for each", or any time the user mentions looping, iterating, batching, paging, or "loop over items". Triggers on "loop", "iterate", "for each", "batch", "page through", "paginate", "rate limit", "process all", or any node that should run once vs once-per-item.
+description: Use when working with multi-item data, batches, paginated APIs, rate-limited APIs, fan-out across multiple branches, anything that needs to "do this for each", or any time the user mentions looping, iterating, batching, paging, parallelism, or "loop over items". Triggers on "loop", "iterate", "for each", "batch", "page through", "paginate", "rate limit", "process all", "fan-out", "parallel branches", "concurrency", or any node that should run once vs once-per-item.
 ---
 
 # n8n Loops
@@ -32,6 +32,7 @@ Default: a node runs once *per item*. An HTTP Request with 50 input items fires 
 - **Don't build a loop when default iteration suffices.** Most nodes (HTTP Request, native service nodes, Set, IF/Switch) run once per input item automatically: N items in, N runs. To make N HTTP calls or create N records, just connect the source to the node. Don't reach for `Loop Over Items` unless you need per-iteration control. (Note: `Execute Workflow` is the exception. It defaults to a single all-items batch. See `n8n-subworkflows` for `mode: 'each'`.)
 - **For paginated APIs, use HTTP Request's built-in pagination.** Don't reinvent with `Loop Over Items` + manual `$pageCount` unless the API is genuinely odd. See `references/HTTP_PAGINATION.md`.
 - **`Loop Over Items` is for explicit batching or per-iteration control** (rate limiting, per-batch error recovery, stateful chunks, polling). See `references/LOOP_OVER_ITEMS.md`.
+- **Per-item iteration is sequential, not parallel.** Each item completes before the next starts, even on parallel _looking_ branches. For a real concurrency pattern, see `n8n-subworkflows`. 
 
 ## Decision tree: which mechanism do I need?
 
@@ -94,7 +95,7 @@ A Code node reading `$input.all()` to compute a sum runs once per upstream item 
 
 ### A respond-to-webhook fires twice
 
-Most painful version. Respond-to-Webhook fires per input item, and two branches converging without a merge fire it twice: first response wins, the rest log errors. Merge first, or ensure only one branch reaches the responder. See `n8n-connections` `FAN_OUT_FAN_IN.md`.
+Most painful version. Respond-to-Webhook fires per input item, and two branches converging without a merge fire it twice: first response wins, the rest log errors. Merge first, or ensure only one branch reaches the responder. See `n8n-node-configuration` `references/MERGE_NODE.md`.
 
 ### An LLM call fires N times when you wanted one summary
 

@@ -12,7 +12,6 @@ The AI Agent node (`@n8n/n8n-nodes-langchain.agent`) is the load-bearing node fo
 | Memory backend choice and sessionId | `n8n-agents` `MEMORY.md` |
 | Structured output: parser + autoFix | `n8n-agents` `STRUCTURED_OUTPUT.md` |
 | Human review on tools | `n8n-agents` `HUMAN_REVIEW.md` |
-| ChatHub response modes | `n8n-agents` `CHATHUB.md` |
 | Slack / Discord / Teams / Telegram surfaces | `n8n-agents` `CHAT_AGENT_PATTERNS.md` |
 | RAG primitives | `n8n-agents` `RAG.md` |
 | Binary in agent tools | `n8n-binary-and-data` `AGENT_TOOL_BINARY.md` |
@@ -29,7 +28,7 @@ n8n streams Agent responses end-to-end when the trigger and responder both suppo
 - **Agent**: `options.enableStreaming: true` (default).
 - **Responder** (when needed): Respond to Webhook with `options.enableStreaming: true` (default).
 
-When all three are aligned, tokens flow to the caller as the agent generates them. For the streaming-vs-responseNodes decision (multi-agent flows, human review, post-agent processing), see `n8n-agents` `CHATHUB.md`.
+When all three are aligned, tokens flow to the caller as the agent generates them.
 
 ## Vision / multimodal
 

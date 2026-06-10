@@ -1,6 +1,6 @@
 ---
 name: n8n-node-configuration
-description: Use when configuring any n8n node: HTTP, webhooks, database, comms (Slack/Gmail/Discord), AI, triggers, anything. Triggers on any node-builder call (`node(...)`, `trigger(...)`, `tool(...)`, `memory(...)`, `languageModel(...)`, `ifElse(...)`, etc.), configuring a parameter, or any node-specific debugging.
+description: Use when configuring any n8n node: HTTP, webhooks, database, comms (Slack/Gmail/Discord), AI, triggers, Merge, anything. Triggers on any node-builder call (`node(...)`, `trigger(...)`, `tool(...)`, `memory(...)`, `languageModel(...)`, `ifElse(...)`, `merge(...)`, etc.), configuring a parameter, `useDataOfInput`, `numberOfInputs`, fan-in convergence, or any node-specific debugging.
 ---
 
 # n8n Node Configuration
@@ -35,6 +35,16 @@ Don't guess, use the `get_node_types` tool.
 ```
 
 Skipping any step compounds the next. The most common skip is step 3, leading to "Cannot read property X" errors that are really "you didn't pass the discriminators."
+
+### `validate_node_config` as a side-channel
+
+`validate_node_config([{ type, typeVersion, parameters, isToolNode? }])` runs the same Zod schema as `validate_workflow` on isolated node configs. Schema-level only; doesn't replace `validate_workflow` (still the publish gate). Cleaner signal for:
+
+- **Iterating on a single node mid-build.** Faster than re-running `validate_workflow` per tweak.
+- **Small edits to an existing workflow.** Wiring unchanged? Check the one node you touched; full validate before publish.
+- **Debugging a misconfigured node.** Per-parameter errors with no graph noise.
+
+For tool subnodes (wired via `ai_tool`), set `isToolNode: true` so the correct `displayOptions` branch evaluates.
 
 ## Operation-aware configuration
 
@@ -85,6 +95,7 @@ Per-category gotchas. Read the file for the node type you're configuring:
 | `references/AI_NODES.md` | AI Agent node config knobs: streaming, vision, `maxIterations`, retries on the model sub-node. Defers design (prompts, tools, memory, structured output) to `n8n-agents` |
 | `references/TRIGGER_NODES.md` | Webhook, Schedule, Manual, Execute Workflow Trigger: input schemas, polling vs realtime |
 | `references/SWITCH_FALLBACK.md` | Configuring a Switch node: unnamed outputs / missing fallback silently drop unmatched items |
+| `references/MERGE_NODE.md` | Configuring a Merge node, or you see `useDataOfInput`, `numberOfInputs`, or branches converging |
 
 ## Anti-patterns
 

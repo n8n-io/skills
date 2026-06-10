@@ -1,6 +1,6 @@
-# Error outputs (per-node)
+# Per-node error outputs
 
-About wiring an **error output on an individual node**: the second main output that fires when the node throws. For workflow-level error handling (catch-all workflows, webhook → respond), see `n8n-error-handling`.
+About wiring an **error output on an individual node**: the second main output that fires when the node throws. For workflow-level error handling (catch-all workflows, webhook → respond), see the rest of `n8n-error-handling`.
 
 ## Two-step setup
 
@@ -71,8 +71,6 @@ workflow
 .add(sheets.output(1).to(errHandler))
 ```
 
-Fan-out on either output is fine. See `FAN_OUT_FAN_IN.md`.
-
 ### Multiple fallible nodes routing to a shared error handler
 
 ```ts
@@ -80,7 +78,6 @@ Fan-out on either output is fine. See `FAN_OUT_FAN_IN.md`.
 .add(nodeB.output(1).to(errorHandler))
 .add(nodeC.output(1).to(errorHandler))
 // Each node needs onError: 'continueErrorOutput' on its config.
-// Fan-in works the same as anywhere else. See FAN_OUT_FAN_IN.md.
 ```
 
 ## Failure modes
@@ -120,7 +117,7 @@ The wire exists in the JSON but the slot never fires, and the handler is unreach
 
 ### Mixing `.onError(handler)` with `output(1)` on the same node
 
-Composes without conflict (same as IF/Switch composite handlers, see parent SKILL.md). Both wires are present.
+Composes without conflict. Both wires are present.
 
 ```ts
 .add(node.onError(loggerNode))
@@ -147,4 +144,4 @@ Per-node error outputs handle one node's failure. They don't catch:
 - Errors on nodes without wired error outputs.
 - Whole-workflow timeouts.
 
-For those, configure a workflow-level **error workflow**. See `n8n-error-handling`.
+For those, configure a workflow-level **error workflow**. See the rest of `n8n-error-handling`.

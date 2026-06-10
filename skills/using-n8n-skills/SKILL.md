@@ -15,6 +15,14 @@ Three rules with no exceptions. Violating any produces workflows that look right
 2. **Validate AND verify before publishing.** `validate_workflow` before `publish_workflow`, and `get_workflow_details` after every create or update to check the `connections` object. Validation alone misses many issues documented in the skills that will silently break workflows.
 3. **Tokens/secrets never go in text fields.** Always use the n8n credential system. If no native node exists, configure HTTP Request with the official credential type. See `n8n-credentials-and-security`.
 
+## Lean on skills, not training data
+
+n8n evolves faster than any model's training cutoff. Parameter names drift, new MCP tools land, defaults change, patterns get deprecated. Anything you "remember" is likely wrong, often silently.
+
+Trust the skills + live MCP tools (`get_node_types`, `get_sdk_reference`, `get_workflow_best_practices`) over recollection. If a skill contradicts what you "know", trust the skill. If `get_node_types` contradicts a skill, trust the tool. Without this discipline you will ship workflows that look right and silently fail: parameter names that don't exist, renamed nodes, deprecated patterns.
+
+Unless a user preference overrides it, err on the side of loading too many skills rather than too few. Even a 3-node webhook flow typically needs `n8n-node-configuration`, `n8n-expressions`, `n8n-error-handling`, and `n8n-workflow-lifecycle`. Nothing in n8n is too small for skills.
+
 ## Strong defaults (each skill owns its exceptions)
 
 - **The Code node is a last resort.** Expression first, then arrow function inside Edit Fields, then Code. Code earns its place for multi-source aggregation, libraries, and stateful work. See `n8n-code-nodes`.
@@ -29,7 +37,7 @@ These rationalizations cause skills to be skipped. If you catch yourself thinkin
 | "This workflow is simple, I'll just build it" | Invoke `n8n-workflow-lifecycle`. Most "simple" workflows are 10+ nodes by the time they ship. |
 | "I'll add a Set node here to map these fields" | Invoke `n8n-expressions`. Set nodes feeding only 0 or 1 downstream consumer are the most common antipattern in this entire pack. |
 | "I'll just use a Code node, it's easier" | Invoke `n8n-code-nodes`. The bar is high. Most reaches for Code can be expressions or Edit Fields with arrow functions. |
-| "Validation passed, I'm ready to publish" | Invoke `n8n-workflow-lifecycle` and walk `VALIDATION_CHECKLIST.md` section 2.5 (the antipattern scan). Validation passing is necessary, not sufficient. |
+| "Validation passed, I'm ready to publish" | Invoke `n8n-workflow-lifecycle` and walk `VALIDATION_CHECKLIST.md` section 2 (the antipattern scan). Validation passing is necessary, not sufficient. |
 | "The agent is wired up, the tool descriptions look fine" | Invoke `n8n-agents` `references/TOOLS.md`. Tool names and descriptions ARE part of the prompt, and "looks fine" usually means generic. |
 | "I'll set this sub-workflow trigger to passthrough" | Invoke `n8n-subworkflows`. Passthrough is only correct for binary-receiving sub-workflows that won't be agent tools, or for sub-workflows that genuinely take no inputs (Define Below requires at least one field). |
 | "I'll use passthrough so binary works, then branch internally on which input shape arrived" | Invoke `n8n-subworkflows` `references/SUBWORKFLOW_PATTERNS.md` "Splitting by input shape". This is the signal to SPLIT into two outer sub-workflows (one Define Below, one passthrough) sharing a common downstream sub-workflow. Don't fight passthrough vs Define Below in one trigger. |
@@ -37,8 +45,8 @@ These rationalizations cause skills to be skipped. If you catch yourself thinkin
 | "The user mentioned data analysis, I'll write Python" | Invoke `n8n-code-nodes`. Default is JavaScript. Python only when explicitly asked. |
 | "I'll add a Loop Over Items here to process each row" | Invoke `n8n-loops`. Default per-item iteration probably handles it without a Loop Over Items node. |
 | "Date math, I'll use a DateTime node" | Invoke `n8n-expressions`. DateTime nodes are almost always wrong. |
-| "I'll wrap this in a Merge with 3 sources" | Invoke `n8n-connections` `references/MERGE_INDEX_RULES.md`. Merge defaults to 2 inputs, and 3+ sources need `numberOfInputs` set explicitly. |
-| "I'll fan out these three slow steps to run in parallel" | Invoke `n8n-connections` `references/FAN_OUT_FAN_IN.md`. n8n executes fan-out branches sequentially (top-to-bottom by Y-position), not concurrently. For real concurrency use sub-workflows with `mode: 'each'` + `waitForSubWorkflow: false`. |
+| "I'll wrap this in a Merge with 3 sources" | Invoke `n8n-node-configuration` `references/MERGE_NODE.md`. Merge defaults to 2 inputs, and 3+ sources need `numberOfInputs` set explicitly. |
+| "I'll fan out these three slow steps to run in parallel" | Invoke `n8n-workflow-lifecycle` and read the Execution model section. n8n executes fan-out branches sequentially (top-to-bottom by Y-position), not concurrently. For real concurrency, see `n8n-loops` and `n8n-subworkflows` (`mode: 'each'` + `waitForSubWorkflow: false`). |
 | "User said which project, I'll just build it" | Invoke `n8n-workflow-lifecycle`. Project is not folder. Ask about folder placement BEFORE building. The MCP can't create folders, so if the requested folder doesn't exist, the user must create it in the UI first. |
 | "I'll just run `test_workflow` to see what happens" | Invoke `n8n-workflow-lifecycle` `references/TESTING.md`. `test_workflow` mocks the trigger only. Slack sends, DB writes, payments all fire for real. Ask the user first when downstreams have side effects. |
 
@@ -56,12 +64,11 @@ Invoke via the Skill tool. Trigger column = when to invoke.
 | `n8n-expressions` | Writing `{{}}`, `$json`, `$node`, expression errors. Luxon for dates, indented multi-line, prefer expressions over extra nodes |
 | `n8n-node-configuration` | Configuring any node. Operation-aware, property dependencies, never assume parameters |
 | `n8n-code-nodes` | User reaches for a Code node, or custom logic is needed. Decision tree, JavaScript patterns when truly required |
-| `n8n-connections` | Wiring IF, Switch, Merge, error outputs, or any non-linear connection. Multi-IO traps, fan-out/fan-in, merge index rules |
 | `n8n-loops` | Multi-item data, batching, paginated APIs, "for each" or "loop over" mentions. Default per-item iteration, `executeOnce`, Loop Over Items, HTTP pagination |
 | `n8n-agents` | LangChain Agent node, tool calling, system prompts, structured output, memory, RAG. Tool names/descriptions as part of the prompt, sub-workflow as tool, modular prompt design |
 | `n8n-error-handling` | Webhook-triggered or production-bound workflows. Error branch on every fallible node, 4xx for caller errors and 5xx for execution errors |
 | `n8n-credentials-and-security` | Any auth, API key, or token mention. Credential system, custom credentials, HTTP Request with official creds |
-| `n8n-binary-and-data` | Files, images, attachments. Binary handling patterns, agent-tool boundary, CDN requirement for chat hub |
+| `n8n-binary-and-data` | Files, images, attachments. Binary handling patterns, agent-tool boundary, CDN requirement for chat surfaces |
 | `n8n-data-tables` | Data Tables: schemas, default columns (id/createdAt/updatedAt), no-FK relational design, dedup, the no-JSON-only-primitives rule, the SDK-vs-UI manual-mapping quirk |
 | `n8n-debugging` | Errors, unexpected behavior, "this isn't working". Believe the user, check parameters, fetch n8n source from GitHub |
 
@@ -80,18 +87,21 @@ Tool names are shown without the MCP prefix. The qualified name is `mcp__<server
 | `search_folders` | List folders. **You cannot create or move folders.** You can only place workflows into folders that already exist. |
 | `search_projects` | List projects. |
 | `archive_workflow` / `publish_workflow` / `unpublish_workflow` | Soft-delete / activate / deactivate. Validate before publish. |
+| `search_executions` | Search executions across the instance (filter by status, workflow, time range). Use for "list recent runs" / "failures in the last hour". Single executions: `get_execution`. |
 
 ### Workflow building
 
 | Tool | What it does |
 |---|---|
 | `get_sdk_reference` | Fetch the n8n Workflow SDK reference. **Read this before writing workflow code.** Sections include `guidelines` and `design`. |
+| `get_workflow_best_practices` | Fetch best-practices for a workflow technique. Call once per technique before searching nodes. `technique: "list"` discovers what's available. |
 | `search_nodes` | Discover nodes by capability (e.g. "gmail", "slack", "schedule trigger"). Returns IDs plus discriminators (resource/operation/mode). |
 | `get_node_types` | Fetch exact TypeScript parameter definitions for node IDs. **Required before configuring any node.** Don't guess parameter names. |
-| `get_suggested_nodes` | Curated recommendations by workflow technique category. |
-| `create_workflow_from_code` | Save a workflow from SDK code. Always include a 1-2 sentence `description`. |
-| `update_workflow` | Update an existing workflow by ID with new SDK code. Replaces the entire workflow definition: no partial updates. Saves a draft only; not live until `publish_workflow` runs. |
-| `validate_workflow` | Validate SDK code before create/update. Necessary but **not sufficient**: won't catch the `.to()` trap. |
+| `create_workflow_from_code` | Save a workflow from SDK code. Always include a 1-2 sentence `description`. Pass `skillsUsed` (below). |
+| `update_workflow` | Apply atomic ops to an existing workflow (max 100, all-or-nothing): node/connection CRUD, credential binding, settings, metadata. Saves a draft; needs `publish_workflow` to go live. Pass `skillsUsed` (below). |
+| `validate_node_config` | Schema-only validation of node configs (1-50 per call). Per-parameter errors, no graph noise. Side-channel for iteration/debug; `validate_workflow` still gates publish. For ai_tool subnodes set `isToolNode: true`. |
+| `validate_workflow` | Validate full SDK code before create/update. Necessary but **not sufficient**: doesn't catch all wiring traps (`.to()`, merge index). |
+| `list_credentials` | List accessible credentials (filter by type/project/etc). Returns metadata only, **never secret values**. Discover IDs before binding via `setNodeCredential`. |
 
 ### Workflow testing & execution
 
@@ -124,6 +134,14 @@ For any n8n task:
 4. **Get node types before configuring any node** (`get_node_types`). Guessing parameter names creates invalid workflows, sometimes silently.
 5. **Validate before publish, verify after create/update.** Validation catches schema errors. Verification (pulling the workflow back via `get_workflow_details`) catches connection bugs validation misses.
 6. **Surface drift when you spot it.** If a tool or parameter doesn't match what a skill says, tell the user. Updates may be needed.
+
+## Reporting skills used
+
+`create_workflow_from_code` and `update_workflow` take an optional `skillsUsed: string[]`. Pass it every time so the n8n team can measure plugin impact on MCP output.
+
+- **Contents:** skills invoked while preparing this workflow change. Use the qualified Skill-tool name (e.g. `n8n-skills:using-n8n-skills`, `n8n-skills:n8n-workflow-lifecycle`).
+- **Window:** skills invoked since the last successful create/update call. Resets after each.
+- **Limits:** max 50 entries, each max 128 chars.
 
 ## Reviewing existing workflows or projects
 

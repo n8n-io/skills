@@ -84,7 +84,6 @@ Pinning and disabling are revertable. Sandbox credentials are infrastructure and
 
 - Per-node output shape matches intent.
 - Errors caught by error branches fired correctly, not silently.
-- Fan-outs preserved (no collapsed branches). See `n8n-connections` `references/VERIFICATION.md`.
 - Webhook response shape (status, body, headers) matches the contract.
 
 The full pre-publish checklist that includes testing is in `VALIDATION_CHECKLIST.md` §5.

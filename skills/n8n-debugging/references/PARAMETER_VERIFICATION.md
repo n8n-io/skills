@@ -51,6 +51,12 @@ Compare returned shape vs. workflow parameters. Renames, restructuring, or major
 
 Most nodes have `(resource, operation)` pairs that change parameter shape. **Always pass discriminators** to `get_node_types`. Otherwise the generic shape may miss operation-specific fields.
 
+## Shortcut: run all four checks at once
+
+`validate_node_config([{ type, typeVersion, parameters, isToolNode? }])` runs the same Zod schema as `validate_workflow` on a single node config. Returns `{ path, message }` per failure: missing required fields, wrong types, dependent params without their parent. Useful when shape-vs-config diffing is slow (deep params, nested displayOptions, AI tool subnodes). For tool subnodes, set `isToolNode: true`.
+
+Schema-level only: doesn't catch connection bugs, missing credentials, or runtime data issues.
+
 ## Credential checks
 
 For auth errors:
@@ -64,17 +70,19 @@ What MCP can see on the node:
 - `id` matches an expected credential reference.
 - Credential type matches what the node expects (e.g., Slack expects `slackOAuth2Api`, not `slackApi`).
 
-What MCP can't see directly: credential contents, OAuth token state, scopes, or even whether the credential still exists on the instance. The MCP doesn't expose a general credential-listing tool, and credential creation isn't exposed either. For these, ask the user, or build a wrapper per `n8n-extending-mcp`.
+What MCP **can** see (via `list_credentials`): id, name, type, scopes, project. Use it to confirm a referenced credential still exists.
+
+What MCP **can't** see: credential contents and live OAuth token state. Credential **creation** is still UI-only (no MCP tool, no public API). Ask the user when those are needed.
 
 OAuth note: n8n auto-refreshes OAuth tokens. The user does not need to re-authenticate periodically. Persistent token errors usually mean the auth setup is wrong (incorrect type, missing scopes, app revoked on the upstream) or the upstream is rejecting the token, not that n8n forgot to refresh.
 
 ## Connection (wiring) checks
 
-Per `n8n-connections`'s `VERIFICATION.md`:
+`validate_workflow` doesn't catch wiring traps. Manual checks via `get_workflow_details`:
 
-- Did `.to()` silently drop a wire?
-- Is a fan-out collapsed?
-- Is a Merge index off-by-one?
+- Is a Merge `numberOfInputs` left at the default 2 when 3+ sources converge? → `n8n-node-configuration` `references/MERGE_NODE.md`
+- Is `useDataOfInput` set to a value that doesn't match the wire feeding that input? → `n8n-node-configuration` `references/MERGE_NODE.md`
+- Is `onError: 'continueErrorOutput'` set on the node but `main[1]` empty, or vice versa? → `n8n-error-handling` `references/NODE_ERROR_OUTPUTS.md`
 
 These don't surface as parameter errors. The node runs with bad input. Always inspect connections after a failed update.
 

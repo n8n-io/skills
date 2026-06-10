@@ -6,7 +6,7 @@
 # the depth; this hook just routes the agent to them.
 #
 # Conditional rules (which skills get suggested):
-# - n8n-connections: 3+ nodes OR Merge present OR agent present
+# - n8n-node-configuration MERGE_NODE.md: Merge present
 # - n8n-expressions: Set OR DateTime OR $json. usage (consolidated reasons)
 # - n8n-code-nodes: Code node present
 # - n8n-loops: splitInBatches present, OR HTTP Request present (pagination)
@@ -34,7 +34,7 @@ if [ -z "$CODE" ]; then
   jq -n '{
     hookSpecificOutput: {
       hookEventName: "PostToolUse",
-      additionalContext: "[validate_workflow returned. Validation is necessary, not sufficient.] If n8n-workflow-lifecycle is not already in your context, load it via the Skill tool and walk references/VALIDATION_CHECKLIST.md section 2.5 before publish."
+      additionalContext: "[validate_workflow returned. Validation is necessary, not sufficient.] If n8n-workflow-lifecycle is not already in your context, load it via the Skill tool and walk references/VALIDATION_CHECKLIST.md section 2 before publish."
     }
   }'
   exit 0
@@ -68,8 +68,8 @@ NODE_COUNT=$(echo "$CODE" | grep -oE "type: ['\"]n8n-" 2>/dev/null | wc -l | tr 
 [ -z "$NODE_COUNT" ] && NODE_COUNT=0
 
 # Composed conditions
-INCLUDE_CONNECTIONS=0
-[ "$NODE_COUNT" -ge 3 ] || [ $HAS_MERGE -eq 1 ] || [ $HAS_AGENT -eq 1 ] && INCLUDE_CONNECTIONS=1
+INCLUDE_MERGE_NODE=0
+[ $HAS_MERGE -eq 1 ] && INCLUDE_MERGE_NODE=1
 
 INCLUDE_LOOP=0
 [ $HAS_LOOP -eq 1 ] || [ $HAS_HTTP -eq 1 ] && INCLUDE_LOOP=1
@@ -110,8 +110,8 @@ EXPR_REASONS="${EXPR_REASONS%, }"
 # Skill bodies carry the depth; this hook just routes the agent to load them.
 # Use literal newlines inside double quotes to avoid ANSI-C quoting hassles.
 SUGGESTIONS=""
-[ $INCLUDE_CONNECTIONS -eq 1 ]    && SUGGESTIONS+="
-- n8n-connections (3+ nodes / Merge / Agent: multi-IO traps, merge index)"
+[ $INCLUDE_MERGE_NODE -eq 1 ]     && SUGGESTIONS+="
+- n8n-node-configuration references/MERGE_NODE.md (Merge: numberOfInputs vs wire count, useDataOfInput off-by-one)"
 [ -n "$EXPR_REASONS" ]            && SUGGESTIONS+="
 - n8n-expressions (${EXPR_REASONS})"
 [ $HAS_CODE -eq 1 ]               && SUGGESTIONS+="
@@ -137,7 +137,7 @@ if [ -z "$SUGGESTIONS" ]; then
 [validate_workflow returned. Validation is necessary, not sufficient.]
 Workflow analyzed: ${NODE_COUNT} node(s); detected:${DETECTED}.
 
-No high-risk patterns surfaced. If anything in this workflow is non-trivial, load n8n-workflow-lifecycle via the Skill tool and walk references/VALIDATION_CHECKLIST.md section 2.5 before publish.
+No high-risk patterns surfaced. If anything in this workflow is non-trivial, load n8n-workflow-lifecycle via the Skill tool and walk references/VALIDATION_CHECKLIST.md section 2 before publish.
 EOF
 )
 else

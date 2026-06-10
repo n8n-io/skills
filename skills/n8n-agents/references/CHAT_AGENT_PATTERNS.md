@@ -1,13 +1,13 @@
 # Chat agent patterns: shell + core + sub-agents
 
-For chat surfaces other than n8n's ChatHub: Slack, Discord, Microsoft Teams, Telegram, embedded webhook chats. The pieces (memory, tools, sub-workflow as tool, structured output) are covered in their own refs. **This file covers the multi-workflow composition that production chat agents grow into**, plus chat-surface-specific gotchas the other refs don't.
+For external chat surfaces: Slack, Discord, Microsoft Teams, Telegram, embedded webhook chats. The pieces (memory, tools, sub-workflow as tool, structured output) are covered in their own refs. **This file covers the multi-workflow composition that production chat agents grow into**, plus chat-surface-specific gotchas the other refs don't.
 
 **Anti-loop filtering is required regardless of complexity.** Any chat-triggered workflow that posts a reply MUST filter out the bot's own user ID right after the trigger, or it triggers itself forever. That's the minimum bar for every bot, not a reason to split. Some triggers may have built in parameters for this.
 
 Beyond that, a simple bot (one trigger → one agent → one reply, with the bot-user filter) lives fine in a single workflow. The shell + core + sub-agents split is for production robustness, not the default. It earns its keep once any of these is true:
 
 - The bot needs loading-state UX (typing indicator, reaction, placeholder message) and graceful error handling beyond a single message.
-- The bot is invoked from more than one surface (Slack AND ChatHub, Discord AND Teams).
+- The bot is invoked from more than one surface (Slack AND Discord, Teams AND Telegram).
 - There are specialist domains the agent shouldn't carry inline (Notion DB schema, CRM custom fields, Linear labels).
 - The agent or its tools will be reused across other workflows.
 
@@ -125,7 +125,7 @@ Users assume nothing is happening if they don't see acknowledgement. Pattern: **
         └── (error)   → [Remove reaction] → [Send error message with link]
 ```
 
-The error path is the easy one to forget. Without it, the loading indicator sits forever and the user thinks the bot is still working. `onError: 'continueErrorOutput'` on the `Execute Workflow` node enables the second branch (see `n8n-connections` `references/ERROR_OUTPUTS.md`).
+The error path is the easy one to forget. Without it, the loading indicator sits forever and the user thinks the bot is still working. `onError: 'continueErrorOutput'` on the `Execute Workflow` node enables the second branch (see `n8n-error-handling` `references/NODE_ERROR_OUTPUTS.md`).
 
 For Slack: `slack` node with `resource: 'reaction'`, `operation: 'add'` and `'remove'`. For Discord/Telegram, typing indicators are time-bounded, so for long agents, you could, for instance, send a placeholder message and edit it instead.
 
@@ -226,10 +226,9 @@ Three workflows demonstrating the full pattern:
 - `SYSTEM_PROMPT.md`: per-execution context, file injection, prompt storage.
 - `STRUCTURED_OUTPUT.md`: parser config, autoFix, fixer model selection.
 - `MEMORY.md`: memory types, `sessionKey` persistence options.
-- `CHATHUB.md`: when the chat surface is ChatHub instead.
-- `n8n-connections` `references/ERROR_OUTPUTS.md`: `onError: 'continueErrorOutput'`.
+- `n8n-error-handling` `references/NODE_ERROR_OUTPUTS.md`: `onError: 'continueErrorOutput'`.
 - `n8n-node-configuration` `references/COMMS_NODES.md`: Slack node parameter shapes.
-- `n8n-binary-and-data` `references/AGENT_TOOL_BINARY.md`: receiving uploaded files and returning generated files. Read the "Surface-specific seams" section before assuming your platform's file events or image rendering match ChatHub's.
+- `n8n-binary-and-data` `references/AGENT_TOOL_BINARY.md`: receiving uploaded files and returning generated files. Read the "Surface-specific seams" section: every platform's file events and image rendering differ.
 
 ## Anti-patterns
 

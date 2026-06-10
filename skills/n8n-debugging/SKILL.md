@@ -25,10 +25,10 @@ Diagnose systematically: cheap checks first, deeper investigation only when thos
 
 Match cause to cheap check, in order of likelihood:
 
-1. **Parameter misconfiguration** → re-fetch via `get_node_types`, compare against `get_workflow_details`, look for type/value/missing-field mismatches.
+1. **Parameter misconfiguration** → re-fetch via `get_node_types`, compare against `get_workflow_details`, look for type/value/missing-field mismatches. `validate_node_config` on the failing node alone returns per-parameter errors directly; faster than eyeballing the diff for nodes with deep / conditional shapes.
 <!-- TEMPORARY: when instance metadata tool is added, change asking user to just using the tool -->
 2. **Stale assumptions** → ask the n8n version, ask when the user last updated the skills plugin, suspect drift if behavior contradicts the skill.
-3. **Paths misconfigured or misconnected** → inspect the `connections` object, verify each output index and merge input (see `n8n-connections`).
+3. **Paths misconfigured or misconnected** → inspect the `connections` object via `get_workflow_details`. For Merge input mismatches, see `n8n-node-configuration` `references/MERGE_NODE.md`.
 4. **Upstream data stripped** → trace `$json.x` references back through the chain, look for any node that replaces the json with its own output. Common offenders: Aggregate, HTTP-binary, Extract from File, Code in "Run for All Items" mode, branching Merge. Not exhaustive: any node can do this if its output shape doesn't include the upstream fields.
 5. **Item context lost** → check downstream of any Aggregate / Execute Once / Split Out for `.item` references, switch to `$input.all().find(...)` or a Merge anchor.
 6. **Logical errors** → trace data through `get_execution` step by step, compare each node's output vs. expected.
@@ -76,7 +76,7 @@ Confirm the actual current state. The user might be looking at a different workf
 Compare:
 
 - Nodes vs. the user's mental model.
-- Connections vs. intent (per `n8n-connections`'s `VERIFICATION.md`).
+- Connections vs. intent: pull via `get_workflow_details` and compare the `connections` object to the SDK code.
 - Credentials vs. expected (per `n8n-credentials-and-security`).
 - **Upstream-strip risk:** any node between a data source and a downstream `$json.x` consumer that replaces the json with its own output? Common offenders are HTTP-binary, Extract from File, Aggregate, Code in "Run for All Items" mode, and branching Merge, but any node can do this if its output shape doesn't include the upstream fields. The consumer should reference the source node by name (`$('Source Node').item.json.x`), not `$json`. Otherwise the field silently resolves to null.
 - **Item-context risk:** any Aggregate / Execute Once / Split Out followed by downstream `.item` references? n8n may not be able to pair items deterministically. Look for "The expression is referencing... multiple matching items" in past executions.
@@ -93,6 +93,8 @@ Compare actual parameter shape vs. configured. Common mismatches:
 - Wrong type (string vs. number, etc.).
 - **`object` and `array` are distinct in n8n's UI type dropdowns** (Set, IF, Switch, Filter, anywhere the UI asks you to pick a type). Picking `object` won't accept an array value, and vice versa. Inside expressions themselves it's normal JS (arrays *are* objects), so the distinction only bites at those UI type-pick surfaces. Watch for this when a `={{ ... }}` expression returns the wrong container shape for a typed slot.
 - A dependent parameter set without its parent (e.g., `credentials` without `authentication !== 'none'`, or `query` without `operation === 'executeQuery'`). Re-fetch with `get_node_types` passing the right discriminators.
+
+If the manual shape-vs-config diff is tedious (deep params, AI tool subnodes, many conditional branches), run `validate_node_config` directly. Returns `{ path, message }` per failure. For tool subnodes set `isToolNode: true`.
 
 ### Step 5: test with pinned data
 

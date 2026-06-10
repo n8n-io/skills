@@ -122,7 +122,7 @@ Append-only insert, queried later:
 | `references/OPERATIONS.md` | Operation surface (insert/upsert/update/get/delete/rowExists), filter syntax, matchType, orderBy |
 | `references/DEDUP_PATTERNS.md` | Idempotency keys, RemoveDuplicates node vs Data Table dedup, search-then-insert vs upsert |
 
-For expression discipline (`$json` vs `$('Node Name').item.json`, the Set-node antipattern), see `n8n-expressions`. For Merge convergence and same-shape branches, see `n8n-connections`.
+For expression discipline (`$json` vs `$('Node Name').item.json`, the Set-node antipattern), see `n8n-expressions`. For Merge convergence and same-shape branches, see `n8n-node-configuration` `references/MERGE_NODE.md`.
 
 ## Anti-patterns
 
@@ -134,7 +134,7 @@ For expression discipline (`$json` vs `$('Node Name').item.json`, the Set-node a
 | Cross-app system-of-record in Data Tables | Hard to share with non-n8n consumers, awkward query surface | Use a real DB |
 | Treating auto-`id` as a stable cross-instance identifier | Resets if the table is recreated, not portable | Use a domain ID column (`arxivId`, `requestId`) for cross-system references |
 | Foreign-key cascade assumptions | n8n doesn't cascade, deleted parents leave orphan children | Soft-delete, or run cleanup workflows that maintain referential integrity |
-| Referencing an immediately-prior node when an intermediate stripped json | Insert silently writes NULLs for fields that "should be there" | Reference a stable upstream node by name, or use a NoOp/Merge convergence anchor (see `n8n-expressions` and `n8n-connections`) |
+| Referencing an immediately-prior node when an intermediate stripped json | Insert silently writes NULLs for fields that "should be there" | Reference a stable upstream node by name, or use a NoOp/Merge convergence anchor (see `n8n-expressions` and `n8n-node-configuration` `references/MERGE_NODE.md`) |
 | Manual-map mode + Set node to fix "Currently no items exist" | Doesn't fix anything, that's a UI quirk, you've added a useless Set node | Verify via `get_workflow_details` that `columns.value` has your mappings, runtime is fine. Tell the user to press the reload button on the columns parameter to make the UI render the fields. |
 
 ## Verification before publishing
