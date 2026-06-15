@@ -1,6 +1,6 @@
 ---
 name: n8n-node-configuration
-description: Use when configuring any n8n node: HTTP, webhooks, database, comms (Slack/Gmail/Discord), AI, triggers, Merge, anything. Triggers on any node-builder call (`node(...)`, `trigger(...)`, `tool(...)`, `memory(...)`, `languageModel(...)`, `ifElse(...)`, `merge(...)`, etc.), configuring a parameter, `useDataOfInput`, `numberOfInputs`, fan-in convergence, or any node-specific debugging.
+description: 'Use when configuring any n8n node: HTTP, webhooks, database, comms (Slack/Gmail/Discord), AI, triggers, Merge, anything. Triggers on any node-builder call (`node(...)`, `trigger(...)`, `tool(...)`, `memory(...)`, `languageModel(...)`, `ifElse(...)`, `merge(...)`, etc.), configuring a parameter, `useDataOfInput`, `numberOfInputs`, fan-in convergence, or any node-specific debugging.'
 ---
 
 # n8n Node Configuration
