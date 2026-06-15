@@ -22,6 +22,7 @@ An n8n instance (any plan, Cloud or self-hosted) with the instance-level MCP ser
 Pick your platform:
 
 - [Claude Code](#claude-code)
+- [Codex](#codex)
 - [Other platforms](#other-platforms)
 
 ### Claude Code
@@ -37,6 +38,20 @@ Inside Claude Code, run these one at a time:
 ```
 
 Restart Claude Code. Skills load automatically.
+
+### Codex
+
+Run these one at a time:
+
+```bash
+codex plugin marketplace add n8n-io/skills
+```
+
+```bash
+codex plugin add n8n-skills@n8n-io
+```
+
+Restart Codex. On first run, Codex prompts to review and trust the plugin's hooks, approve them so the SessionStart, PreToolUse, and PostToolUse reminders fire. Skills load automatically.
 
 ### Other platforms
 
@@ -94,7 +109,7 @@ Each skill is a markdown file. Frontmatter tells the agent when to load it. The 
 
 See [CLAUDE.md](./CLAUDE.md), the contributing guide for humans and AI agents alike. **Open an issue first.** We don't accept PRs that haven't been discussed in an issue.
 
-**Looking for contributors:** feature parity plugins for other coding agents (Cursor, Codex, OpenCode, etc.). The skills are just markdown, the work is wrapping them so they activate in those harnesses the way they do in Claude Code.
+**Looking for contributors:** feature parity plugins for other coding agents (Cursor, OpenCode, etc.). The skills are just markdown, the work is wrapping them so they activate in those harnesses the way they do in Claude Code.
 
 ## License
 

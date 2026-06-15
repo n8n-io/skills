@@ -41,6 +41,7 @@ If a sentence does none of those, cut it.
 - `skills/<name>/references/*.md`: where depth lives. Loaded on demand. A 2,000-line reference is fine if it only loads when needed.
 - `skills/<name>/references/examples/*.json`: workflow JSON examples. Reference by relative path, never inline. Every example must validate on a current n8n version (CI runs validation on PRs).
 - `hooks/`: SessionStart and PreToolUse. Don't add new hooks without an issue discussion first.
+- `plugins/n8n-skills/`: **generated** Codex plugin bundle, a mirror of `hooks/` + `skills/`. Codex needs a self-contained plugin dir (it won't follow symlinks and rejects the repo root as a plugin), so the content is copied. Never hand-edit it. After changing `hooks/` or `skills/`, run `bash scripts/sync-codex-bundle.sh`; CI fails if the bundle is stale. The Codex marketplace entry is `.agents/plugins/marketplace.json`.
 
 SKILL.md layout:
 
@@ -82,6 +83,7 @@ Four flavors:
 - [ ] No tokens, real URLs, or real credentials in examples
 - [ ] Workflow JSON examples validate on a current n8n version
 - [ ] If touching hooks: regression-tested across `startup`, `resume`, `clear`, `compact`
+- [ ] If touching `hooks/` or `skills/`: ran `bash scripts/sync-codex-bundle.sh` so the Codex bundle is in sync
 - [ ] If touching the meta-skill MCP tool list: confirmed against a live n8n MCP connection
 
 ## License
