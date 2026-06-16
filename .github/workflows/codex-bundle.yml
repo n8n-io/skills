@@ -1,0 +1,29 @@
+name: codex-bundle
+
+# Fails the build if plugins/n8n-skills/ has drifted from the canonical
+# hooks/ + skills/ trees. Regenerate locally with: bash scripts/sync-codex-bundle.sh
+
+on:
+  pull_request:
+    paths:
+      - "hooks/**"
+      - "skills/**"
+      - "plugins/n8n-skills/**"
+      - "scripts/sync-codex-bundle.sh"
+  push:
+    branches: [main]
+
+jobs:
+  verify-bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Regenerate Codex bundle
+        run: bash scripts/sync-codex-bundle.sh
+      - name: Fail if bundle is out of sync
+        run: |
+          if ! git diff --quiet; then
+            echo "::error::plugins/n8n-skills/ is stale. Run: bash scripts/sync-codex-bundle.sh and commit the result."
+            git diff --stat
+            exit 1
+          fi
