@@ -72,7 +72,7 @@ For full conventions (verb-noun patterns, capitalization, prefixes), read `refer
 - **Workflows:** verb-first, scoped. `Send weekly customer report` not `Customer report sender`.
 - **Nodes:** describe what they *do* in this workflow, not the node type. `Fetch active customers` not `Postgres1`.
 - **Sub-workflows:** prefix with the domain or `Subworkflow:` for stateless reusable ones. `Subworkflow: Parse RFC2822 date`. The prefix is what `search_workflows({ query })` matches on. See `n8n-subworkflows` `references/NAMING_AND_DISCOVERY.md`.
-- **Tags:** UI-only. The MCP can't read or write tags, so they're for humans browsing the UI. Don't rely on them for AI discovery.
+- **Tags:** the MCP can both read and write tags. Read with `list_tags` (every tag + `usageCount`) and `search_workflows({ tags })` (AND semantics; result items also include their `tags`). Write with `update_workflow`'s `addTags` / `removeTags` operations (a tag that doesn't exist yet is created). Two caveats: `create_workflow_from_code` has no tag parameter, so tag *after* creating via `update_workflow`; and `get_workflow_details` does **not** surface tags (it returns `tags: []` even when tags are attached), so verify applied tags with `list_tags` (check `usageCount`) or `search_workflows`. Tags remain primarily a human-facing organization tool — for AI discovery still prefer naming + `description` with `search_workflows({ query })`, using `tags` as a secondary filter.
 
 ## Readability: descriptions, sticky notes, conventions
 
