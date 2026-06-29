@@ -72,7 +72,7 @@ For full conventions (verb-noun patterns, capitalization, prefixes), read `refer
 - **Workflows:** verb-first, scoped. `Send weekly customer report` not `Customer report sender`.
 - **Nodes:** describe what they *do* in this workflow, not the node type. `Fetch active customers` not `Postgres1`.
 - **Sub-workflows:** prefix with the domain or `Subworkflow:` for stateless reusable ones. `Subworkflow: Parse RFC2822 date`. The prefix is what `search_workflows({ query })` matches on. See `n8n-subworkflows` `references/NAMING_AND_DISCOVERY.md`.
-- **Tags:** UI-only. The MCP can't read or write tags, so they're for humans browsing the UI. Don't rely on them for AI discovery.
+- **Tags:** the MCP reads tags (`list_tags`, `search_workflows({ tags })`) and writes them (`update_workflow` `addTags`/`removeTags`; missing tags are created). Caveats: `create_workflow_from_code` takes no tag param (tag afterward via `update_workflow`), and `get_workflow_details` returns `tags: []` even when tags exist — verify with `list_tags` or `search_workflows`.
 
 ## Readability: descriptions, sticky notes, conventions
 
