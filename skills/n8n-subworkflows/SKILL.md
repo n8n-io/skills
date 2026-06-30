@@ -3,8 +3,6 @@ name: n8n-subworkflows
 description: Use when building anything multi-step, anything that looks repeatable, anything the user mentions reusing, or any workflow with more than ~10 nodes. Triggers on "reuse", "I do this in another workflow", "extract", "modular", "shared logic", "subworkflow", multi-step builds, or any task that mentions logic the user has built before.
 ---
 
-<!-- TEMPORARY: change workflow prefix searching to tags when tag tools are added to mcp -->
-
 # n8n Sub-workflows
 
 Sub-workflows are reusable functions. The `Execute Workflow Trigger` declares input parameters, the body does work, the last node returns output. Callers invoke it like any other node.
@@ -15,7 +13,7 @@ Without sub-workflows, the same logic gets duplicated across workflows. Bug fixe
 
 ## Non-negotiables
 
-1. **Search before you build.** Before writing logic that handles a generic problem, check if a sub-workflow already exists. Use `search_workflows({ query: 'Subworkflow' })`, `query: '<keyword>'`, etc. The MCP can't filter by tags, so naming is the discovery mechanism.
+1. **Search before you build.** Before writing logic that handles a generic problem, check if a sub-workflow already exists. Use `search_workflows({ query: 'Subworkflow' })`, `query: '<keyword>'`, or `search_workflows({ tags: ['<tag>'] })` if the instance uses tags for categorisation. The MCP now supports tag-based filtering via `search_workflows({ tags: [...] })` and tag discovery via `list_tags`. Naming is still the primary discovery mechanism for most instances.
 2. **`Execute Workflow Trigger` uses "Define Below" with typed fields, not passthrough.** Define Below is the only mode that lets agent tools (`fromAi`) and structured callers pass values in. Two exceptions: (a) the sub-workflow specifically needs to receive binary (then it can't be wired as an agent tool directly), or (b) the sub-workflow takes no inputs at all (Define Below requires at least one field). See "Sub-workflow inputs and outputs" below.
 
 ## Strong defaults
@@ -150,9 +148,12 @@ You're about to build something you've built before. Stop. Search.
 search_workflows({ query: 'date' })
 search_workflows({ query: 'Customer' })
 search_workflows({ query: 'Subworkflow:' })
+// If the instance uses tags for categorisation:
+list_tags()  // discover available tag names
+search_workflows({ tags: ['<relevant-tag>'] })
 ```
 
-If something matches, use it. If not, build it as a sub-workflow so the *next* search finds it. The prefix convention (`Subworkflow:`, `Customer:`, etc.) is what makes that work.
+If something matches, use it. If not, build it as a sub-workflow so the *next* search finds it. The prefix convention (`Subworkflow:`, `Customer:`, etc.) is what makes keyword search work. Tags are a complementary discovery path when the instance uses them consistently.
 
 ## Linear, long workflows are fine when most of the work is in sub-workflows
 
@@ -199,10 +200,11 @@ When the user describes something multi-step or generic-sounding:
 
 ```
 1. search_workflows with relevant queries (e.g. 'Subworkflow', the domain prefix, the operation keyword)
-2. If candidates appear, fetch get_workflow_details on the top 1-3
-3. Confirm fit by reading the inputs/outputs and (briefly) the body
-4. If a fit exists → use it. Tell the user "I found `<name>`. Using that."
-5. If no fit exists → build new with the prefix convention so the next search finds it
+2. Optionally: list_tags() to discover tag names, then search_workflows({ tags: ['<tag>'] }) for tag-based discovery
+3. If candidates appear, fetch get_workflow_details on the top 1-3
+4. Confirm fit by reading the inputs/outputs and (briefly) the body
+5. If a fit exists → use it. Tell the user "I found `<name>`. Using that."
+6. If no fit exists → build new with the prefix convention so the next search finds it
 ```
 
 The "tell the user" step matters. They benefit from knowing what's already in their library.
@@ -305,7 +307,7 @@ For the polling-after-fire-and-forget pattern, see `references/SUBWORKFLOW_PATTE
 | Anti-pattern | What goes wrong | Fix |
 |---|---|---|
 | Duplicating the same date-parsing nodes in three workflows | Bug fixes happen in two places, miss the third | Extract to `Subworkflow: Parse <format> date` once |
-| Building a new sub-workflow without searching | Library grows duplicates, and future searches find both | Always `search_workflows` first |
+| Building a new sub-workflow without searching | Library grows duplicates, and future searches find both | Always `search_workflows` first (by keyword and/or tag) |
 | Sub-workflow named/described as pure that quietly writes to a log table | Callers can't reason about retry or idempotency, side effect ambushes them | Either make the side effect part of the contract (rename, document, return its result) or move it out |
 | Sub-workflow with no `description` | Won't be found in future searches, nobody knows what it does | Set `description` with input/output shape and purpose |
 | Sub-workflow named `Helper 3` | Name doesn't tell anyone what it does, and doesn't match any prefix-based search | Verb-first prefix name (`Subworkflow: ...`, `Customer: ...`), see `n8n-workflow-lifecycle` `NAMING_CONVENTIONS.md` |
@@ -314,4 +316,3 @@ For the polling-after-fire-and-forget pattern, see `references/SUBWORKFLOW_PATTE
 | Passthrough trigger for a zero-input sub-workflow without a Set-to-clear node and explanatory sticky | Body silently reads stray fields from whatever the caller forwarded; future readers think passthrough is for binary | Add a `Set` ("Keep Only Set", no fields) at the top of the body and a sticky on the trigger noting no inputs are expected |
 | Sub-workflow called as an agent tool that expects binary input | Agent tools can't pass binary directly | See `n8n-binary-and-data` `AGENT_TOOL_BINARY.md` for the right pattern |
 | 30-node workflow with no extraction | Hard to read, hard to test, hard to replace | Extract logical sections into sub-workflows |
-
