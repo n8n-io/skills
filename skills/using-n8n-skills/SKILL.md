@@ -82,7 +82,7 @@ Tool names are shown without the MCP prefix. The qualified name is `mcp__<server
 
 | Tool | What it does |
 |---|---|
-| `search_workflows` | Search workflows across the instance by `query` (matches name and description, but tags are not filterable via MCP). The **only** cross-workflow tool. Use it to discover what already exists. |
+| `search_workflows` | Search workflows across the instance by `query` (matches name and description) and/or `tags` (array of tag name strings; deduplicated, empty strings dropped). Results include a `tags` field (`[{ id, name }]`) on each workflow. Use it to discover what already exists. |
 | `get_workflow_details` | Fetch a workflow's full JSON by ID. Use after every create/update to verify connections. |
 | `search_folders` | List folders. **You cannot create or move folders.** You can only place workflows into folders that already exist. |
 | `search_projects` | List projects. |
@@ -102,6 +102,12 @@ Tool names are shown without the MCP prefix. The qualified name is `mcp__<server
 | `validate_node_config` | Schema-only validation of node configs (1-50 per call). Per-parameter errors, no graph noise. Side-channel for iteration/debug; `validate_workflow` still gates publish. For ai_tool subnodes set `isToolNode: true`. |
 | `validate_workflow` | Validate full SDK code before create/update. Necessary but **not sufficient**: doesn't catch all wiring traps (`.to()`, merge index). |
 | `list_credentials` | List accessible credentials (filter by type/project/etc). Returns metadata only, **never secret values**. Discover IDs before binding via `setNodeCredential`. |
+
+### Tag management
+
+| Tool | What it does |
+|---|---|
+| `list_tags` | List all workflow tags on the instance with usage counts. Optional `limit` parameter (default 500). Returns `{ count, totalCount, data: [{ id, name, usageCount, createdAt, updatedAt }] }`. Read-only, idempotent. Requires `tag:list` scope. |
 
 ### Workflow testing & execution
 
