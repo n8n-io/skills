@@ -1,6 +1,6 @@
 ---
 name: n8n-extending-mcp
-description: 'Use when you want to expose an n8n workflow as a tool the coding agent can call. Two cases. (1) Wrap n8n API capabilities the MCP doesn''t natively expose: folder CRUD, tag CRUD, instance metadata, credential creation. (2) Expose a general-purpose workflow as an agent tool: a workflow that calls a third-party API, runs business logic, or does any task you want the agent to invoke. Triggers on "expose as MCP tool", "build a tool for my agent", "I need to know X" where X isn''t an MCP tool, "create folder", "create tag", or any capability gap.'
+description: 'Use when you want to expose an n8n workflow as a tool the coding agent can call. Two cases. (1) Wrap n8n API capabilities the MCP doesn''t natively expose: folder CRUD, tag create/get/delete, instance metadata, credential creation. (2) Expose a general-purpose workflow as an agent tool: a workflow that calls a third-party API, runs business logic, or does any task you want the agent to invoke. Triggers on "expose as MCP tool", "build a tool for my agent", "I need to know X" where X isn''t an MCP tool, "create folder", "create tag", or any capability gap.'
 ---
 
 <!-- TEMPORARY: update whenever n8n mcp capacities are added. a lot of listed functionalities missing are coming soon -->
@@ -8,7 +8,7 @@ description: 'Use when you want to expose an n8n workflow as a tool the coding a
 
 Any n8n workflow with MCP access enabled becomes a tool the coding agent can call by name. Two common cases:
 
-1. **Wrap n8n capabilities the MCP doesn't expose.** The MCP covers workflow CRUD, validation, execution, data tables, credential listing, execution search, folder/project listing. Still missing: folder CRUD, tag CRUD, instance metadata, credential creation. Build a workflow that hits the n8n API and exposes the result as an agent tool.
+1. **Wrap n8n capabilities the MCP doesn't expose.** The MCP covers workflow CRUD, validation, execution, data tables, credential listing, execution search, folder/project listing, and tag listing (`list_tags`) plus tag-filtered workflow search. Still missing: folder CRUD, tag create/get/delete, instance metadata, credential creation. Build a workflow that hits the n8n API and exposes the result as an agent tool.
 2. **Expose a general-purpose workflow as a tool.** A workflow that has nothing to do with n8n itself (calls a third-party API, runs internal business logic, looks something up in a private system) can be MCP-callable. Lets the agent invoke real operations during a coding session.
 
 The MCP calls your workflow as if it were a native tool: input from the `Execute Workflow Trigger`, output from the workflow's last node.
@@ -18,7 +18,7 @@ The MCP calls your workflow as if it were a native tool: input from the `Execute
 Case 1 (wrap n8n capability):
 
 - Folder CRUD (create, rename, move, delete): REST API exists, no MCP tool yet.
-- Tag CRUD (create, list, get, delete): REST API exists, no MCP tool yet.
+- Tag create/get/delete: REST API exists, no MCP tool yet. (Tag listing is now natively available via `list_tags`.)
 - Instance metadata (limits, plan info, configured integrations): no MCP tool.
 - Credential creation: REST API exists (`POST /credentials`), no MCP tool yet.
 - Any n8n API operation the MCP doesn't natively expose.
@@ -96,7 +96,7 @@ Output: { version, edition, integrations: [...], limits: {...} }
 
 The MCP **doesn't register each tool-flagged workflow as a separately-named MCP tool.** Discovery and invocation are two steps:
 
-1. **Discover** via `search_workflows({ query: '<keyword>' })`. Workflows with MCP access on return `availableInMCP: true`. Filter for that.
+1. **Discover** via `search_workflows({ query: '<keyword>' })` or `search_workflows({ tags: ['<tag>'] })`. Workflows with MCP access on return `availableInMCP: true`. Filter for that.
 2. **Invoke** via `execute_workflow({ workflowId, inputs })`. Read the input schema first with `get_workflow_details`. The `Execute Workflow Trigger` defines typed fields.
 
 Output is whatever the workflow's last node returns.
@@ -116,4 +116,3 @@ Output is whatever the workflow's last node returns.
 | Wrapper that does bulk or destructive ops (archive, delete) with no dry-run | One bug touches many workflows | Strong explicit opt-in per call, plus a dry-run mode that lists targets without acting |
 | Wrapper returns credential *values* | Token leak via tool output | Return IDs, names, types only. Never the secret. |
 | Skipping the validate + verify + test cycle on the wrapper | The "tool" itself is broken, manifests as confusing tool-not-found or empty-response errors | Same lifecycle as any workflow: see `n8n-workflow-lifecycle` |
-
