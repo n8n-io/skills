@@ -97,7 +97,7 @@ Encapsulation: the sub-workflow can be refactored heavily without changing what 
 
 Goal: an agent that can generate or edit images. Both share most logic (prompt → Gemini → upload → return URL), but they differ in whether they download an existing image first.
 
-**Sub-workflow `Subworkflow: Generate or edit image`:**
+**Sub-workflow `Generate or edit image` (tags `subworkflow`, `tool`):**
 
 ```
 [Execute Workflow Trigger: { imagePrompt, imageName, sessionId }]
@@ -182,9 +182,7 @@ For the broader error story (4xx/5xx mapping, retries, error workflows, deciding
 
 ### Keep tool sub-workflows discoverable
 
-<!-- TEMPORARY: when tags are added, put here that tags should always be put on subworkflows -->
-
-Name them with the standard prefix (`Subworkflow:` or domain-specific). The Tool Workflow node references them by ID (stable), but humans browse the UI by name.
+Tag them with `tool` (plus a domain tag like `customer` where it applies) so `search_workflows({ tags: ['tool'] })` finds them. Attach tags with `update_workflow` `addTags` after creating, since `create_workflow_from_code` can't set tags. Give them a plain descriptive name; the Tool Workflow node references them by ID (stable), and tags carry the category.
 
 ### Wire `onError: 'continueErrorOutput'` on fallible nodes
 

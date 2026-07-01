@@ -3,8 +3,6 @@ name: n8n-subworkflows
 description: Use when building anything multi-step, anything that looks repeatable, anything the user mentions reusing, or any workflow with more than ~10 nodes. Triggers on "reuse", "I do this in another workflow", "extract", "modular", "shared logic", "subworkflow", multi-step builds, or any task that mentions logic the user has built before.
 ---
 
-<!-- TEMPORARY: change workflow prefix searching to tags when tag tools are added to mcp -->
-
 # n8n Sub-workflows
 
 Sub-workflows are reusable functions. The `Execute Workflow Trigger` declares input parameters, the body does work, the last node returns output. Callers invoke it like any other node.
@@ -15,14 +13,14 @@ Without sub-workflows, the same logic gets duplicated across workflows. Bug fixe
 
 ## Non-negotiables
 
-1. **Search before you build.** Before writing logic that handles a generic problem, check if a sub-workflow already exists. Use `search_workflows({ query: 'Subworkflow' })`, `query: '<keyword>'`, etc. The MCP can't filter by tags, so naming is the discovery mechanism.
+1. **Search before you build.** Before writing logic that handles a generic problem, check if a sub-workflow already exists. Filter by tag (`search_workflows({ tags: ['subworkflow'] })`, a domain tag) and/or keyword (`query: '<keyword>'`). Tags are the discovery mechanism (n8n 2.27.0+).
 2. **`Execute Workflow Trigger` uses "Define Below" with typed fields, not passthrough.** Define Below is the only mode that lets agent tools (`fromAi`) and structured callers pass values in. Two exceptions: (a) the sub-workflow specifically needs to receive binary (then it can't be wired as an agent tool directly), or (b) the sub-workflow takes no inputs at all (Define Below requires at least one field). See "Sub-workflow inputs and outputs" below.
 
 ## Strong defaults
 
 - **Anything reusable becomes a sub-workflow.** If a logical chunk could plausibly be needed elsewhere, extract it. Exception: trivial wrappers (one HTTP call, no logic) and tightly-coupled-to-this-caller chunks.
 - **Default to stateless for pure logic** (input → output, no external state). For state-touching logic, build *deliberately* stateful sub-workflows that abstract the operation behind a clean contract (the ORM / repository pattern). What to avoid is *accidental* state: a "validate" sub-workflow that quietly writes to a log table.
-- **Verb-first prefix naming**: `Subworkflow: Parse RFC2822 date`, `Customer: hydrate from Stripe`, `Tool: list available credentials`. The prefix is what `search_workflows` matches on. See `references/NAMING_AND_DISCOVERY.md`.
+- **Tag for discovery**: every sub-workflow gets `subworkflow`, a domain tag (`customer`), and/or `tool`. Tags are what `search_workflows({ tags })` filters on; names stay plain and descriptive (`Parse RFC2822 date`). See `references/NAMING_AND_DISCOVERY.md`.
 - **Description carries keywords.** Input/output shape + representative terms, so varied queries surface it.
 - **Split when input contracts genuinely differ** (binary vs JSON, sync vs async, divergent auth schemes). Don't fit divergent contracts under one trigger via passthrough + internal branching. See `references/SUBWORKFLOW_PATTERNS.md` "Splitting by input shape".
 
@@ -54,9 +52,9 @@ Takes input, returns output. No I/O outside the inputs/outputs. Default for pure
 
 Examples:
 
-- `Subworkflow: Parse RFC2822 date`. Input: date string. Output: ISO date or error.
-- `Subworkflow: Compute MRR from subscription`. Input: subscription object. Output: MRR number.
-- `Subworkflow: Format invoice as HTML`. Input: invoice data. Output: HTML string.
+- `Parse RFC2822 date` (tag `subworkflow`). Input: date string. Output: ISO date or error.
+- `Compute MRR from subscription` (tag `subworkflow`). Input: subscription object. Output: MRR number.
+- `Format invoice as HTML` (tag `subworkflow`). Input: invoice data. Output: HTML string.
 
 When you need the logic again, call it without worrying about side effects firing.
 
@@ -66,10 +64,10 @@ Reads or writes external state behind a clean input/output contract. Comparable 
 
 Examples:
 
-- `Customer: get by id`. Input: id. Output: customer object or `{ ok: false, error: 'not_found' }`. Reads the DB.
-- `Customer: write billing record`. Input: record. Output: `{ ok: true, id }`. Writes the DB.
-- `Audit: append event`. Input: event. Output: `{ ok: true, eventId }`. Writes to a logging store.
-- `Notify: send to on-call`. Input: channel, message. Output: `{ ok: true, messageId }`. Calls Slack/SMTP.
+- `Get customer by id` (tag `customer`). Input: id. Output: customer object or `{ ok: false, error: 'not_found' }`. Reads the DB.
+- `Write customer billing record` (tags `customer`, `billing`). Input: record. Output: `{ ok: true, id }`. Writes the DB.
+- `Append audit event` (tag `audit`). Input: event. Output: `{ ok: true, eventId }`. Writes to a logging store.
+- `Send to on-call` (tag `notification`). Input: channel, message. Output: `{ ok: true, messageId }`. Calls Slack/SMTP.
 
 The point of building these as sub-workflows:
 
@@ -128,15 +126,15 @@ When a webhook workflow is API-shaped, treat it like one. Sub-workflows become m
 
 ```
 Webhook
-  → [Subworkflow: Verify JWT]    # decode + validate; 401 on failure
-  → [Subworkflow: Rate limit]    # check + bump counter; 429 on failure
+  → [Verify JWT]    # decode + validate; 401 on failure
+  → [Rate limit]    # check + bump counter; 429 on failure
   → IF (all middleware ok)
     → Main handler logic
     → Respond 200
   → ELSE → Respond with the 4xx the middleware returned
 ```
 
-Canonical example: custom JWT auth rolled inside n8n. `Subworkflow: Verify JWT` takes the raw `Authorization` header, decodes, validates signature and expiry, returns `{ ok: true, user_id }` or `{ ok: false, status: 401, message }`. The caller IFs on `ok`, responds early on failure, continues on success.
+Canonical example: custom JWT auth rolled inside n8n. `Verify JWT` (tag `subworkflow`) takes the raw `Authorization` header, decodes, validates signature and expiry, returns `{ ok: true, user_id }` or `{ ok: false, status: 401, message }`. The caller IFs on `ok`, responds early on failure, continues on success.
 
 Why a sub-workflow and not inline: every webhook that needs auth calls the same one. Swap the library, rotate the signing key, or add refresh-token logic in a single place. The reuse target is exact, the contract is small, and the failure response shape is consistent across every API endpoint.
 
@@ -148,11 +146,11 @@ You're about to build something you've built before. Stop. Search.
 
 ```
 search_workflows({ query: 'date' })
-search_workflows({ query: 'Customer' })
-search_workflows({ query: 'Subworkflow:' })
+search_workflows({ tags: ['customer'] })
+search_workflows({ tags: ['subworkflow'] })
 ```
 
-If something matches, use it. If not, build it as a sub-workflow so the *next* search finds it. The prefix convention (`Subworkflow:`, `Customer:`, etc.) is what makes that work.
+If something matches, use it. If not, build it as a sub-workflow and tag it so the *next* search finds it. The tag convention (`subworkflow`, domain tags, `tool`) is what makes that work.
 
 ## Linear, long workflows are fine when most of the work is in sub-workflows
 
@@ -198,11 +196,11 @@ If your workflow has 15+ nodes and isn't mostly Execute Workflow calls and branc
 When the user describes something multi-step or generic-sounding:
 
 ```
-1. search_workflows with relevant queries (e.g. 'Subworkflow', the domain prefix, the operation keyword)
+1. search_workflows with relevant tags and/or query (e.g. `tags: ['subworkflow']`, a domain tag, the operation keyword)
 2. If candidates appear, fetch get_workflow_details on the top 1-3
 3. Confirm fit by reading the inputs/outputs and (briefly) the body
 4. If a fit exists → use it. Tell the user "I found `<name>`. Using that."
-5. If no fit exists → build new with the prefix convention so the next search finds it
+5. If no fit exists → build new and tag it (`subworkflow`, domain, `tool`) so the next search finds it
 ```
 
 The "tell the user" step matters. They benefit from knowing what's already in their library.
@@ -298,18 +296,18 @@ For the polling-after-fire-and-forget pattern, see `references/SUBWORKFLOW_PATTE
 | File | Read when |
 |---|---|
 | `references/SUBWORKFLOW_PATTERNS.md` | `mode: 'all'` vs `'each'` default, splitting by input shape (binary/passthrough vs Define Below), fire-and-forget parallelization with Data Table polling |
-| `references/NAMING_AND_DISCOVERY.md` | Naming a new sub-workflow, searching for existing ones, the prefix convention |
+| `references/NAMING_AND_DISCOVERY.md` | Naming and tagging a new sub-workflow, searching for existing ones, the tag convention |
 
 ## Anti-patterns
 
 | Anti-pattern | What goes wrong | Fix |
 |---|---|---|
-| Duplicating the same date-parsing nodes in three workflows | Bug fixes happen in two places, miss the third | Extract to `Subworkflow: Parse <format> date` once |
+| Duplicating the same date-parsing nodes in three workflows | Bug fixes happen in two places, miss the third | Extract to a single `Parse <format> date` sub-workflow (tag `subworkflow`) once |
 | Building a new sub-workflow without searching | Library grows duplicates, and future searches find both | Always `search_workflows` first |
 | Sub-workflow named/described as pure that quietly writes to a log table | Callers can't reason about retry or idempotency, side effect ambushes them | Either make the side effect part of the contract (rename, document, return its result) or move it out |
 | Sub-workflow with no `description` | Won't be found in future searches, nobody knows what it does | Set `description` with input/output shape and purpose |
-| Sub-workflow named `Helper 3` | Name doesn't tell anyone what it does, and doesn't match any prefix-based search | Verb-first prefix name (`Subworkflow: ...`, `Customer: ...`), see `n8n-workflow-lifecycle` `NAMING_CONVENTIONS.md` |
-| Sub-workflow with no `Subworkflow:` / domain prefix | Won't show up under `query: 'Subworkflow'` or domain searches, future you can't find it | Always use a prefix at create time |
+| Sub-workflow named `Helper 3` | Name doesn't tell anyone what it does | Verb-first descriptive name (`Parse RFC2822 date`), see `n8n-workflow-lifecycle` `NAMING_CONVENTIONS.md` |
+| Untagged sub-workflow | Won't show up under any `tags` filter, future you can't find it | Tag it (`subworkflow`, domain, `tool`) right after create via `update_workflow` `addTags` |
 | `Execute Workflow Trigger` set to `passthrough` when not handling binary and not deliberately zero-input | No typed schema means agent tools can't fill parameters via `fromAi`, structured callers can't pass values cleanly | Use "Define Below" with declared `workflowInputs.values` (name + type per field). The exceptions are binary-receiving sub-workflows and sub-workflows that genuinely take no inputs (see "Exception 2") |
 | Passthrough trigger for a zero-input sub-workflow without a Set-to-clear node and explanatory sticky | Body silently reads stray fields from whatever the caller forwarded; future readers think passthrough is for binary | Add a `Set` ("Keep Only Set", no fields) at the top of the body and a sticky on the trigger noting no inputs are expected |
 | Sub-workflow called as an agent tool that expects binary input | Agent tools can't pass binary directly | See `n8n-binary-and-data` `AGENT_TOOL_BINARY.md` for the right pattern |

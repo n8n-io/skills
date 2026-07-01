@@ -88,7 +88,7 @@ Fix and re-test if anything's off.
 
 Quick pass:
 
-- Workflow name follows the verb-first pattern (`NAMING_CONVENTIONS.md`). Sub-workflows use a prefix (`Subworkflow:`, `<Domain>:`, `Tool:`) since that's how `search_workflows` finds them.
+- Workflow name follows the verb-first pattern (`NAMING_CONVENTIONS.md`). Sub-workflows are tagged (`subworkflow`, a domain tag, `tool`) since that's how `search_workflows({ tags })` finds them.
 - `description` is set and captures both *what* and *why*, with searchable keywords.
 - Nodes are renamed from defaults.
 

@@ -1,6 +1,6 @@
 ---
 name: n8n-extending-mcp
-description: 'Use when you want to expose an n8n workflow as a tool the coding agent can call. Two cases. (1) Wrap n8n API capabilities the MCP doesn''t natively expose: folder CRUD, tag CRUD, instance metadata, credential creation. (2) Expose a general-purpose workflow as an agent tool: a workflow that calls a third-party API, runs business logic, or does any task you want the agent to invoke. Triggers on "expose as MCP tool", "build a tool for my agent", "I need to know X" where X isn''t an MCP tool, "create folder", "create tag", or any capability gap.'
+description: 'Use when you want to expose an n8n workflow as a tool the coding agent can call. Two cases. (1) Wrap n8n API capabilities the MCP doesn''t natively expose: folder CRUD, tag rename/delete, instance metadata, credential creation. (2) Expose a general-purpose workflow as an agent tool: a workflow that calls a third-party API, runs business logic, or does any task you want the agent to invoke. Triggers on "expose as MCP tool", "build a tool for my agent", "I need to know X" where X isn''t an MCP tool, "create folder", "rename tag", or any capability gap.'
 ---
 
 <!-- TEMPORARY: update whenever n8n mcp capacities are added. a lot of listed functionalities missing are coming soon -->
@@ -8,7 +8,7 @@ description: 'Use when you want to expose an n8n workflow as a tool the coding a
 
 Any n8n workflow with MCP access enabled becomes a tool the coding agent can call by name. Two common cases:
 
-1. **Wrap n8n capabilities the MCP doesn't expose.** The MCP covers workflow CRUD, validation, execution, data tables, credential listing, execution search, folder/project listing. Still missing: folder CRUD, tag CRUD, instance metadata, credential creation. Build a workflow that hits the n8n API and exposes the result as an agent tool.
+1. **Wrap n8n capabilities the MCP doesn't expose.** The MCP covers workflow CRUD, validation, execution, data tables, credential listing, execution search, folder/project listing, tag listing and attach/detach. Still missing: folder CRUD, tag rename/delete, instance metadata, credential creation. Build a workflow that hits the n8n API and exposes the result as an agent tool.
 2. **Expose a general-purpose workflow as a tool.** A workflow that has nothing to do with n8n itself (calls a third-party API, runs internal business logic, looks something up in a private system) can be MCP-callable. Lets the agent invoke real operations during a coding session.
 
 The MCP calls your workflow as if it were a native tool: input from the `Execute Workflow Trigger`, output from the workflow's last node.
@@ -18,7 +18,7 @@ The MCP calls your workflow as if it were a native tool: input from the `Execute
 Case 1 (wrap n8n capability):
 
 - Folder CRUD (create, rename, move, delete): REST API exists, no MCP tool yet.
-- Tag CRUD (create, list, get, delete): REST API exists, no MCP tool yet.
+- Tag rename/delete: the MCP lists tags (`list_tags`) and attaches/detaches them (`update_workflow` `addTags`/`removeTags`, auto-creating unknown names), but can't rename or delete tag entities. REST API exists for those.
 - Instance metadata (limits, plan info, configured integrations): no MCP tool.
 - Credential creation: REST API exists (`POST /credentials`), no MCP tool yet.
 - Any n8n API operation the MCP doesn't natively expose.
@@ -41,7 +41,7 @@ Don't reach for this for:
 
 ## Protocol
 
-- **Search for existing wrappers first.** `search_workflows({ query: 'Tool:' })` and a capability keyword search. If something matches, use it instead of duplicating.
+- **Search for existing wrappers first.** `search_workflows({ tags: ['tool'] })` and a capability keyword search. If something matches, use it instead of duplicating.
 - **For case 1, build as a stateless, queryable utility.** Takes input, calls n8n's API, returns the result. No side effects. Case 2 may legitimately have side effects (sending, writing); name them in the tool description.
 - **Offer to edit the agent's context file yourself** (CLAUDE.md, AGENTS.md, GEMINI.md, whatever the user's agent reads on session start) to add an entry for the new tool. You have Edit/Write tools, so there's no reason to make the user paste a snippet manually. Ask first since it's their config file, then edit it directly when they say yes.
 
