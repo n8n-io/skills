@@ -72,7 +72,7 @@ For full conventions (verb-noun patterns, capitalization, prefixes), read `refer
 - **Workflows:** verb-first, scoped. `Send weekly customer report` not `Customer report sender`.
 - **Nodes:** describe what they *do* in this workflow, not the node type. `Fetch active customers` not `Postgres1`.
 - **Sub-workflows:** prefix with the domain or `Subworkflow:` for stateless reusable ones. `Subworkflow: Parse RFC2822 date`. The prefix is what `search_workflows({ query })` matches on. See `n8n-subworkflows` `references/NAMING_AND_DISCOVERY.md`.
-- **Tags:** UI-only. The MCP can't read or write tags, so they're for humans browsing the UI. Don't rely on them for AI discovery.
+- **Tags:** browsable via the MCP (`list_tags`) and filterable in `search_workflows({ tags: [...] })`; also visible in the n8n UI. Useful for both humans and agents to categorize and discover workflows. Tag create/rename/delete is still UI-only; the MCP supports listing and filtering only.
 
 ## Readability: descriptions, sticky notes, conventions
 
@@ -167,4 +167,3 @@ Keep it tight: half a dozen bullets, not a wall of text. The user shouldn't have
 | Sticky titled "Set, If, Set" or sticky-of-every-color | Re-states what's visible / color becomes pure noise | Title with the *purpose*; one color per category |
 | `description: "Sends Slack."` | Adds nothing visible from the trigger and Slack node | Include *why* + AI-derived context: "Sends weekly summary to founders. Replaces manual report that kept getting skipped." |
 | Designing fan-out branches as if they execute concurrently | n8n runs fan-out branches sequentially, top-to-bottom by Y-position. Total runtime is the sum of branches, not the max | For real concurrency, dispatch via `Execute Workflow` with `mode: 'each'` + `waitForSubWorkflow: false`. See `n8n-subworkflows` "Fire-and-forget parallelization" |
-
