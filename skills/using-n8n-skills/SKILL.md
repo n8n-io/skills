@@ -82,12 +82,13 @@ Tool names are shown without the MCP prefix. The qualified name is `mcp__<server
 
 | Tool | What it does |
 |---|---|
-| `search_workflows` | Search workflows across the instance by `query` (matches name and description, but tags are not filterable via MCP). The **only** cross-workflow tool. Use it to discover what already exists. |
+| `search_workflows` | Search workflows across the instance by `query` (matches name and description) and/or `tags` (array of tag name strings, deduplicated, empty strings dropped). Results include a `tags` field (`[{ id, name }]`) on each workflow. |
 | `get_workflow_details` | Fetch a workflow's full JSON by ID. Use after every create/update to verify connections. |
 | `search_folders` | List folders. **You cannot create or move folders.** You can only place workflows into folders that already exist. |
 | `search_projects` | List projects. |
 | `archive_workflow` / `publish_workflow` / `unpublish_workflow` | Soft-delete / activate / deactivate. Validate before publish. |
 | `search_executions` | Search executions across the instance (filter by status, workflow, time range). Use for "list recent runs" / "failures in the last hour". Single executions: `get_execution`. |
+| `list_tags` | List all workflow tags on the instance with usage counts. Optional `limit` parameter (default 500). Returns `{ count, totalCount, data: [{ id, name, usageCount, createdAt, updatedAt }] }`. Read-only, idempotent. |
 
 ### Workflow building
 
