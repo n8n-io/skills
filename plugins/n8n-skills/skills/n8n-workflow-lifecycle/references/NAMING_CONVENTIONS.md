@@ -25,21 +25,23 @@ Sentence case, not Title Case. Easier to scan, and matches normal prose. Acronym
 
 ### Punctuation
 
-- Colon for category prefix: `Subworkflow: Parse RFC2822 date`, `Daily: clean up stale Slack DMs`.
+- Colon for category prefix on top-level workflows: `Daily: clean up stale Slack DMs`, `Webhook: report-request`. Sub-workflows categorize by tag, not name prefix (see Sub-workflows and Tags below).
 - No emojis in workflow names. They break in URLs, search, and CLI tools.
 - No trailing version numbers (`v2`, `final`). For versioning, archive the old one or use git on the SDK code.
 
 ## Sub-workflows
 
-Same verb-first rule, but prefix with a domain or `Subworkflow:` for stateless sub-workflows reusable anywhere.
+Same verb-first rule. The name says what the sub-workflow does; a **tag** says what kind it is. Category lives in tags, not a name prefix.
 
-| Pattern | Example |
+| Name | Tags |
 |---|---|
-| `Subworkflow: <verb> <object>` | `Subworkflow: Fetch JSON with retry`, `Subworkflow: Parse RFC2822 date` |
-| `<Domain>: <verb> <object>` | `Customer: hydrate from Stripe`, `Billing: compute MRR` |
-| `Tool: <description>` | `Tool: list available credentials` (for MCP-extending workflows, see `n8n-extending-mcp`) |
+| `Fetch JSON with retry` | `subworkflow` |
+| `Parse RFC2822 date` | `subworkflow` |
+| `Hydrate customer from Stripe` | `customer`, `subworkflow` |
+| `Compute MRR` | `billing` |
+| `List available credentials` | `tool` (MCP-extending workflows, see `n8n-extending-mcp`) |
 
-The prefix isn't a folder, it's a name pattern. It exists as a workaround: the MCP currently doesn't expose tags, and `search_workflows` matches only against name and description, so prefixes act as the searchable category mechanism. If/when the MCP adds tag support, this convention should shift from prefix-based to tag-based; the prefix is a temporary stand-in for what tags will eventually do better.
+Tags compose: a customer-domain tool carries `customer` + `tool`. `search_workflows({ tags })` filters on them with AND semantics (a workflow must have every listed tag). This replaces the old name-prefix convention, which only existed because the MCP couldn't filter by tags. Full discovery protocol: `n8n-subworkflows` `references/NAMING_AND_DISCOVERY.md`.
 
 ## Nodes
 
@@ -69,22 +71,18 @@ For `Merge`, name after what's being merged (`Merge customer + Stripe data`).
 
 ## Tags
 
-Tags are UI-only. The n8n MCP cannot create, attach, read, or filter by tags, and the SDK doesn't expose a tags field. Useful for **humans** browsing the UI, but **not** an AI discovery mechanism.
+Tags are the AI-side discovery and categorization mechanism (n8n 2.27.0+). The MCP can read them (`list_tags`), filter by them (`search_workflows({ tags })`, AND semantics), and attach/detach them (`update_workflow` `addTags`/`removeTags`). `addTags` auto-creates an unknown tag, so you never pre-register one. It cannot rename or delete tag entities, and `create_workflow_from_code` can't set tags at create time, so tag right after creating.
 
-If tagging in the UI:
+Tag names are now exact-match machine identifiers, not just human labels:
 
-- All lowercase, with spaces (not hyphens): `customer data`, `daily report`, `util`, `prod`.
-- Optionally lead with an emoji as a quick visual category marker: `🧰 util`, `📊 daily report`, `💵 financial`. Use it consistently within a project or skip it entirely. Mixing tagged-with-emoji and tagged-without-emoji within the same project defeats the purpose.
-- Aim for up to 2-4 per workflow, since more can be noise.
+- All lowercase, spaces not hyphens: `customer`, `daily report`, `util`, `prod`. A case or spelling mismatch is a different tag.
+- No emojis. `addTags` and the `tags` filter match names exactly, so an emoji makes every match fragile.
+- **`list_tags` before tagging** to reuse the instance's existing names instead of spawning near-duplicates (`customer` vs `customers`).
+- Aim for 2-4 per workflow. More is noise.
 
-### Discovery is name-based, not tag-based
+Standard category tags: `subworkflow` (reusable building block), a domain tag (`customer`, `billing`, `notification`), and `tool` (MCP-callable, see `n8n-extending-mcp`). For the full discovery protocol, see `n8n-subworkflows` `references/NAMING_AND_DISCOVERY.md`.
 
-`search_workflows({ query })` matches name and description only. To make a sub-workflow findable, the name must contain the discovery hook:
-
-- Verb-first prefix: `Subworkflow: Parse RFC2822 date`, `Customer: hydrate from Stripe`, `Tool: list available credentials`.
-- Description carries representative keywords.
-
-For the full naming-and-discovery protocol, see `n8n-subworkflows` `references/NAMING_AND_DISCOVERY.md`.
+Instance and user conventions overrule all of the above. If `list_tags` shows an existing vocabulary, or the user prefers different names, casing, or categories, match theirs. Consistency within an instance beats this skill's defaults.
 
 ## Workflow `description`
 

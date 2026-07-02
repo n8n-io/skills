@@ -50,19 +50,19 @@ Each outer sub-workflow does its input-specific prep (validation, fetching, norm
 A "process this paper" capability that can come from either an external ID or a user-uploaded PDF:
 
 ```
-Subworkflow: Process Paper from External ID
+Process Paper from External ID            (tag subworkflow)
   Trigger: Define Below { arxivId: string, source: string }
     → [Validate ID, dedup, fetch metadata, download PDF, extract text]
-    → [Execute Workflow: Subworkflow: Summarize and Store Paper]
+    → [Execute Workflow: Summarize and Store Paper]
         with { arxivId, title, authors, body, source, ... }
 
-Subworkflow: Process Paper from Uploaded PDF
+Process Paper from Uploaded PDF           (tag subworkflow)
   Trigger: Passthrough  (required: binary flows through)
     → [Hash binary for synthetic ID, dedup, extract text]
-    → [Execute Workflow: Subworkflow: Summarize and Store Paper]
+    → [Execute Workflow: Summarize and Store Paper]
         with { arxivId: '<synthetic>', title, body, source: 'upload', ... }
 
-Subworkflow: Summarize and Store Paper          (the shared core)
+Summarize and Store Paper                 (the shared core, tag subworkflow)
   Trigger: Define Below { arxivId, title, body, source, ... }
     → [LLM with structured output, Data Table Insert, return result]
 ```

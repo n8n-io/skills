@@ -26,7 +26,7 @@ Unless a user preference overrides it, err on the side of loading too many skill
 ## Strong defaults (each skill owns its exceptions)
 
 - **The Code node is a last resort.** Expression first, then arrow function inside Edit Fields, then Code. Code earns its place for multi-source aggregation, libraries, and stateful work. See `n8n-code-nodes`.
-- **Anything reusable becomes a stateless sub-workflow.** Search existing ones via `search_workflows({ query: 'Subworkflow' })` before building. See `n8n-subworkflows`.
+- **Anything reusable becomes a stateless sub-workflow.** Search existing ones via `search_workflows({ tags: ['subworkflow'] })` before building. See `n8n-subworkflows`.
 
 ## Red flags: thoughts that mean STOP and invoke
 
@@ -59,7 +59,7 @@ Invoke via the Skill tool. Trigger column = when to invoke.
 | Skill | Trigger |
 |---|---|
 | `n8n-workflow-lifecycle` | Starting, designing, organizing, or finishing a workflow. Covers sticky-note conventions, descriptions that capture the *why*, naming, validation checklist, folder limitations, MCP-access-per-workflow gotcha |
-| `n8n-subworkflows` | Anything reusable, multi-step builds, or the user mentions reuse. Search before building, stateless patterns, naming-prefix convention for discovery |
+| `n8n-subworkflows` | Anything reusable, multi-step builds, or the user mentions reuse. Search before building, stateless patterns, tag-based discovery convention |
 | `n8n-extending-mcp` | You need capabilities the MCP doesn't natively provide. Wrap n8n APIs as workflow tools, with user permission |
 | `n8n-expressions` | Writing `{{}}`, `$json`, `$node`, expression errors. Luxon for dates, indented multi-line, prefer expressions over extra nodes |
 | `n8n-node-configuration` | Configuring any node. Operation-aware, property dependencies, never assume parameters |
@@ -82,10 +82,11 @@ Tool names are shown without the MCP prefix. The qualified name is `mcp__<server
 
 | Tool | What it does |
 |---|---|
-| `search_workflows` | Search workflows across the instance by `query` (matches name and description, but tags are not filterable via MCP). The **only** cross-workflow tool. Use it to discover what already exists. |
+| `search_workflows` | Search workflows across the instance by `query` (substring on name/description) and/or `tags` (exact tag names, AND semantics: must have all). The **only** cross-workflow tool. Use it to discover what already exists. |
 | `get_workflow_details` | Fetch a workflow's full JSON by ID. Use after every create/update to verify connections. |
 | `search_folders` | List folders. **You cannot create or move folders.** You can only place workflows into folders that already exist. |
 | `search_projects` | List projects. |
+| `list_tags` | List all workflow tags (with `usageCount` per tag). Check the instance's tag vocabulary before tagging or filtering, so you reuse exact names. Tags are attached/detached via `update_workflow` `addTags`/`removeTags`; there's no tag rename/delete tool. |
 | `archive_workflow` / `publish_workflow` / `unpublish_workflow` | Soft-delete / activate / deactivate. Validate before publish. |
 | `search_executions` | Search executions across the instance (filter by status, workflow, time range). Use for "list recent runs" / "failures in the last hour". Single executions: `get_execution`. |
 
@@ -98,7 +99,7 @@ Tool names are shown without the MCP prefix. The qualified name is `mcp__<server
 | `search_nodes` | Discover nodes by capability (e.g. "gmail", "slack", "schedule trigger"). Returns IDs plus discriminators (resource/operation/mode). |
 | `get_node_types` | Fetch exact TypeScript parameter definitions for node IDs. **Required before configuring any node.** Don't guess parameter names. |
 | `create_workflow_from_code` | Save a workflow from SDK code. Always include a 1-2 sentence `description`. Pass `skillsUsed` (below). |
-| `update_workflow` | Apply atomic ops to an existing workflow (max 100, all-or-nothing): node/connection CRUD, credential binding, settings, metadata. Saves a draft; needs `publish_workflow` to go live. Pass `skillsUsed` (below). |
+| `update_workflow` | Apply atomic ops to an existing workflow (max 100, all-or-nothing): node/connection CRUD, credential binding, settings, metadata, tags (`addTags`/`removeTags`, auto-creating unknown names). Saves a draft; needs `publish_workflow` to go live. Pass `skillsUsed` (below). |
 | `validate_node_config` | Schema-only validation of node configs (1-50 per call). Per-parameter errors, no graph noise. Side-channel for iteration/debug; `validate_workflow` still gates publish. For ai_tool subnodes set `isToolNode: true`. |
 | `validate_workflow` | Validate full SDK code before create/update. Necessary but **not sufficient**: doesn't catch all wiring traps (`.to()`, merge index). |
 | `list_credentials` | List accessible credentials (filter by type/project/etc). Returns metadata only, **never secret values**. Discover IDs before binding via `setNodeCredential`. |

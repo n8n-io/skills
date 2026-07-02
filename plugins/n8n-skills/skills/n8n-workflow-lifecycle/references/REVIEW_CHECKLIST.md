@@ -235,7 +235,7 @@ The system prompt is the load-bearing config of an agent. Severity ranges by how
 ### Naming
 
 - [ ] **Workflow name doesn't follow verb-first pattern** (`Send weekly customer report` vs. `Customer report sender`). → [NAMING_CONVENTIONS.md](NAMING_CONVENTIONS.md)
-- [ ] **Sub-workflow without a discoverable prefix** (`Subworkflow:`, `<Domain>:`, `Tool:`). The MCP can't filter by tags; naming is the discovery mechanism. → [NAMING_AND_DISCOVERY.md](../../n8n-subworkflows/references/NAMING_AND_DISCOVERY.md)
+- [ ] **Untagged sub-workflow** (missing `subworkflow`, a domain tag, or `tool`). Tags are the discovery mechanism; an untagged sub-workflow won't surface under any `tags` filter. → [NAMING_AND_DISCOVERY.md](../../n8n-subworkflows/references/NAMING_AND_DISCOVERY.md)
 
 ### Readability
 
