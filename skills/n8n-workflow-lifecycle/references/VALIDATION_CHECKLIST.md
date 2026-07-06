@@ -84,13 +84,14 @@ Check:
 
 Fix and re-test if anything's off.
 
-### 6. Naming and descriptions
+### 6. Naming, descriptions, structure
 
 Quick pass:
 
 - Workflow name follows the verb-first pattern (`NAMING_CONVENTIONS.md`). Sub-workflows are tagged (`subworkflow`, a domain tag, `tool`) since that's how `search_workflows({ tags })` finds them.
 - `description` is set and captures both *what* and *why*, with searchable keywords.
 - Nodes are renamed from defaults.
+- Workflows past ~10 nodes group their logical steps into node groups (`setNodeGroups`). Ungrouped still runs, but a large ungrouped canvas is hard to read and maintain, so take it seriously. See `SKILL.md` "Readability".
 
 These don't block publish technically, but workflows without them rot faster.
 
@@ -119,7 +120,7 @@ The most common skip is item 2 (the antipattern scan). It feels like polish, but
 
 n8n keeps versions: `get_workflow_details` returns both `versionId` (the current draft) and `activeVersionId` (the version that's live). They diverge when you save changes via `update_workflow`. Those changes only go live on the next `publish_workflow` call. **Saving is not publishing.**
 
-1. **Consider rolling back to a previously published version first.** `publish_workflow` accepts an optional `versionId` argument, so a known-good version can be re-published while the bug is investigated. The MCP doesn't list version history, so the user usually has to grab the prior `versionId` from n8n's UI version history and hand it over.
+1. **Consider rolling back first.** `get_workflow_history` lists saved versions (newest first); `get_workflow_version` fetches a known-good one, and `restore_workflow_version` re-applies it as the draft (or pass its `versionId` to `publish_workflow` to go straight live). (n8n 2.29.0+.) Rollback no longer needs the user to copy a `versionId` from the UI, but per the guardrail above, recommend it and let the user approve before you restore.
 2. **Recommend `unpublish_workflow` only if no rollback target exists** and the workflow is actively running and broken. A scheduled or webhook workflow with broken connections shouldn't keep firing. Surface the problem and the recommendation, let the user pull the trigger.
 3. **Fix-forward path: `update_workflow` saves the draft, then `publish_workflow` makes it live.** Two separate steps: `update_workflow` does NOT auto-publish, the change sits as an unpublished draft until `publish_workflow` runs against it. Re-run this checklist before the publish step. Don't trust that "just one fix" doesn't ripple.
 

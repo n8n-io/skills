@@ -74,18 +74,19 @@ For full conventions (verb-noun patterns, capitalization, prefixes), read `refer
 - **Sub-workflows:** plain descriptive name (`Parse RFC2822 date`); carry the category in tags (`subworkflow`, a domain tag, `tool`), not a name prefix. `search_workflows({ tags })` filters on them. See `n8n-subworkflows` `references/NAMING_AND_DISCOVERY.md`.
 - **Tags:** the AI-side discovery mechanism (n8n 2.27.0+). The MCP lists (`list_tags`), filters (`search_workflows({ tags })`), and attaches them (`update_workflow` `addTags`/`removeTags`, auto-creating unknown names). Lowercase, 2-4 per workflow. See `references/NAMING_CONVENTIONS.md`.
 
-## Readability: descriptions, sticky notes, conventions
+## Readability: descriptions, node groups, sticky notes, conventions
 
-For any workflow over ~5 nodes, three levers carry the readability load:
+For any workflow over ~5 nodes, four levers carry the readability load:
 
 - **Workflow `description`: capture the *why*, including AI-derived context.** Two sentences: what it does and why it exists. Most importantly, capture context you had during conversation that won't otherwise survive into the file (the constraint that drove the design, why this approach over the alternative, the user's reason for asking). Otherwise it dies with the chat.
+- **Node groups: group every logical step past ~10 nodes.** Partition the canvas into named groups, one per logical step (`Validate input`, `Enrich order`, `Notify`), via `update_workflow` `setNodeGroups` (n8n 2.28.0+). Each group must be a connected, trigger-free run with a single entry and exit (n8n rejects anything else); collapsed, the workflow reads as its steps, not its nodes. Where a section is too branchy to form one group, a sticky note marks it instead. Organization only, members run inline (reuse/isolation is a sub-workflow's job).
 - **Sticky notes: group nodes by purpose.** Use the `n8n-nodes-base.stickyNote` node with markdown `content` (`### Title` on the first line, 1-3 sentences of body) and an integer `color` 1-7. Title each with the purpose ("Validate input" not "If, Set, If"). Pick a small palette and stick to it (e.g. gray/yellow for processing, red for errors, pink for TODOs); random colors communicate nothing.
 - **Node `notes` for non-obvious config.** Explain *why* a workaround exists or a Code node does what it does. Don't annotate obvious nodes.
 
 Plus two notes:
 
 - **Match existing project conventions before introducing your own.** Skim a couple of nearby workflows via `search_workflows` + `get_workflow_details` and mirror the sticky palette, naming, and description style.
-- **Layout is auto-applied on create / update.** SDK `position` values for non-sticky nodes are ignored. Stickies and naming are your readability levers.
+- **Layout is auto-applied on create / update.** SDK `position` values for non-sticky nodes are ignored. Stickies, node groups, and naming are your readability levers.
 
 ## Folder limitations
 

@@ -25,7 +25,7 @@ Use when: you have a domain identifier and want first-time and subsequent-time h
 ```ts
 {
     operation: 'upsert',
-    dataTableId: { __rl: true, value: '<table-id>', mode: 'list' },
+    dataTableId: { __rl: true, value: '<table-id>', mode: 'list' }, // real ID from search_data_tables (or explore_node_resources tableSearch)
     matchType: 'allConditions',
     filters: {
         conditions: [
@@ -60,7 +60,7 @@ Optional: `returnAll` (vs `limit`), `orderBy` + `orderByColumn` + `orderByDirect
 ```ts
 {
     operation: 'get',
-    dataTableId: { __rl: true, value: '<table-id>', mode: 'list' },
+    dataTableId: { __rl: true, value: '<table-id>', mode: 'list' }, // real ID from search_data_tables (or explore_node_resources tableSearch)
     matchType: 'anyCondition',
     filters: {
         conditions: [
@@ -89,7 +89,7 @@ Use when: dedup logic is "skip already-in-table" (or vice versa) and you want on
 ```ts
 {
     operation: 'rowNotExists',
-    dataTableId: { __rl: true, value: '<table-id>', mode: 'list' },
+    dataTableId: { __rl: true, value: '<table-id>', mode: 'list' }, // real ID from search_data_tables (or explore_node_resources tableSearch)
     matchType: 'allConditions',
     filters: {
         conditions: [
@@ -166,7 +166,7 @@ Defaults to OR in some versions. For AND, set `matchType: 'allConditions'`.
 
 ### Filtering on a non-existent column
 
-May error or silently match nothing depending on version. `keyName` has a UI dropdown of valid columns. In SDK code, double-check spelling.
+May error or silently match nothing depending on version. `keyName`/`orderByColumn` are `@loadOptionsMethod` columns: resolve real names via `explore_node_resources` (`getDataTableColumns`, `loadOptions`) rather than guessing spelling.
 
 ### Update with no match silently does nothing
 

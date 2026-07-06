@@ -17,8 +17,7 @@ For any **API-shaped workflow** (webhook trigger paired with `Respond to Webhook
 2. **Status code maps to cause.** Caller's fault → 4xx, your fault → 5xx. A 200 default on an error path produces silent failure: caller thinks success, processes empty data.
 
 For any **unattended workflow** (scheduled, cron, queue-driven, agent tool):
-<!-- TEMPORARY: update when workflow settings are editable by mcp -->
-3. **Configure a workflow-level error workflow.** Catches what escapes per-node handling: timeouts, crashes between nodes, errors in unwired nodes. See `references/ERROR_WORKFLOWS.md`. Currently, only the user can set error workflows through the UI in the workflow settings.
+3. **Set a workflow-level error workflow.** Catches what escapes per-node handling: timeouts, crashes between nodes, errors in unwired nodes. Set it via `update_workflow` `setWorkflowSettings.errorWorkflow` (n8n 2.29.0+); the target must be a published workflow containing an active Error Trigger, or the update is rejected. See `references/ERROR_WORKFLOWS.md`.
 
 ## Strong defaults
 

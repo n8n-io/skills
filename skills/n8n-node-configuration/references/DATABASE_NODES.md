@@ -34,7 +34,7 @@ Postgres and the n8n MySQL node both use `$1, $2, ...` via `options.queryReplace
 ### `executeQuery` vs structured operations
 
 - **`executeQuery`**: raw SQL with parameters. Most flexible. Use for joins, CTEs, window functions.
-- **`select` / `insert` / `update` / `upsert` / `deleteTable`**: n8n builds the SQL. Less flexible but less footgun-prone for simple cases.
+- **`select` / `insert` / `update` / `upsert` / `deleteTable`**: n8n builds the SQL. Less flexible but less footgun-prone for simple cases. Their `table` (and `schema`) are `@searchListMethod` lookups: resolve real names via `explore_node_resources`.
 
 Note: "Delete" maps to `operation: 'deleteTable'` (display vs internal-value mismatch).
 

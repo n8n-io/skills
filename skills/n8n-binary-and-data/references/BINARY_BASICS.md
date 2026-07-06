@@ -131,7 +131,7 @@ For large files: upload to storage immediately, pass URL/ID through the workflow
 ## Checking binary in `get_execution`
 
 ```
-get_execution({ id: <execution_id> })
+get_execution({ executionId: <execution_id>, workflowId: <workflow_id>, includeData: true })
 ```
 
 Shows per-node input/output. Look for the `binary` slot on items. Missing where expected = stripped there.

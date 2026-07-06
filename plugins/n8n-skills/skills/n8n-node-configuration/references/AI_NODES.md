@@ -48,5 +48,5 @@ Set `temperature: 0` on the model sub-node for extraction, classification, or an
 
 For high-volume workflows:
 
-- **Don't always pick the biggest frontier model.** Small models for classification or routing, larger for reasoning, reserve frontier for genuinely complex multi-tool agents.
+- **Don't always pick the biggest frontier model.** Small models for classification or routing, larger for reasoning, reserve frontier for genuinely complex multi-tool agents. The chat-model sub-node's `model` param is a load-options list: resolve the exact model identifier via `explore_node_resources` rather than guessing a model-ID string.
 - **`options.batching`** on the Agent: `batchSize` (parallel items, default 1) and `delayBetweenBatches` (ms, default 0) for rate-limited or expensive flows.

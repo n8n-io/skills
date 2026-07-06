@@ -59,6 +59,8 @@ const slackTrigger = trigger({
 })
 ```
 
+`channelId` (`getChannels`) and the exclusion `options.userIds` (`getUsers`) are lookup values: resolve real IDs via `explore_node_resources` instead of hardcoding the placeholders. RLC values in this skill's `examples/*.json` are instance-specific, re-resolve before reuse.
+
 When the trigger filters at its own boundary, you don't need a separate filter node.
 
 **When the trigger doesn't expose a usable exclusion filter** (currently Teams, plus Discord via community nodes that vary), the first node after the trigger must filter the bot's own user ID out:

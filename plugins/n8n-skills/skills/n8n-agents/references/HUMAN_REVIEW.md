@@ -34,7 +34,7 @@ const slackReview = tool({
   version: 2.4,
   config: {
     name: 'Slack approval',
-    parameters: { message: '...', user: { __rl: true, mode: 'list', value: '...' }, approvalOptions, options },
+    parameters: { message: '...', user: { __rl: true, mode: 'list', value: '...' }, approvalOptions, options }, // resolve user/channel IDs via explore_node_resources (getUsers/getChannels)
     credentials: { slackApi: newCredential('Slack') },
     subnodes: { tools: [refundTool] },  // wrapped tools go here
   },

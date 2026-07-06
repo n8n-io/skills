@@ -75,15 +75,14 @@ Why it's worth the extra step:
 
 Caveats:
 - Requires an **n8n API credential** on the error workflow. Create one under *Settings → API* (personal access token), then attach it to the n8n node's Credential field. Without it the node fails with a 401, which means an unhandled error in the *error* workflow itself.
-- Requires the failing workflow to have **Save Execution Data** enabled (instance default or per-workflow setting). If executions aren't persisted, the API returns the metadata only.
+- Requires the failing workflow to have **Save Execution Data** enabled (instance default or per-workflow setting; set it via `setWorkflowSettings` `saveDataErrorExecution`/`saveDataSuccessExecution`). If executions aren't persisted, the API returns the metadata only.
 - The n8n node call itself can fail (API down, rate-limited). Wire its error output to a fallback that still notifies, otherwise the original error vanishes.
 
 Minimal is enough for most cases. The featureful version pays off in production-critical workflows where on-call time matters.
 
 ## Setting it up
 
-<!-- TEMPORARY: tell AI to do it itself once mcp settings tool is exposed -->
-Set on individual workflows via the settings panel. Must be done by the user in the UI
+Set it via `update_workflow` `setWorkflowSettings.errorWorkflow` (the target workflow's ID). Validated server-side: the target must exist, be published, and contain an active Error Trigger node, else the update is rejected. Pass `"DEFAULT"` to clear. (n8n 2.29.0+; older instances set it in the workflow settings panel.)
 
 ## What the error workflow should *not* do
 
