@@ -57,7 +57,7 @@ Need to do something for each item?
 
 ## `executeOnce`: the single-fire setting
 
-Every node's Settings tab has an **Execute Once** toggle. When on, the node runs once using only the first input item.
+Every node's Settings tab has an **Execute Once** toggle. When on, the node runs once using only the first input item. In SDK code, set `executeOnce: true` as shown; on an existing workflow, apply it via `update_workflow` `setNodeSettings` (n8n 2.24.0+).
 
 ```ts
 {
