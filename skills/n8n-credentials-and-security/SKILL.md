@@ -30,7 +30,7 @@ A node that needs auth has a `credentials` parameter pointing to a credential ID
 
 For the full model (SDK resolution, rotation, project scoping), see `references/CREDENTIAL_SYSTEM.md`.
 
-The same credential can also power discovery. When a node has a resource-locator or load-options field, use `explore_node_resources` with the credential ID to fetch the real values from that account.
+The same credential can also power discovery. When a node has a resource-locator or load-options field, use `explore_node_resources` with the credential ID, the exact method name from `get_node_types`, and any already-selected parent fields in `currentNodeParameters` to fetch the real values from that account. See `n8n-node-configuration` for the full pattern.
 
 ## Decision tree: how to authenticate this thing
 
