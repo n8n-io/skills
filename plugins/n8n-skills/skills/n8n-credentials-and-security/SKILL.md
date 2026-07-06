@@ -15,6 +15,7 @@ description: Use when handling any auth, API keys, tokens, OAuth, bearer tokens,
 
 - **Use native credentials when available.** Every native node (Slack, Gmail, Postgres, OpenAI, etc.) has a credential type. Don't reach for generic credential types when a native option exists.
 - **For multi-header or header-plus-query auth shapes**, use the `httpCustomAuth` credential type. See `references/CUSTOM_CREDENTIALS.md`.
+- **Use credentials to resolve live resource lists.** If a node needs sheets, channels, databases, or model IDs from an authenticated account, call `explore_node_resources` after `list_credentials` instead of asking the user for raw IDs.
 
 ## The credential system
 
@@ -28,6 +29,8 @@ In n8n, credentials are first-class objects:
 A node that needs auth has a `credentials` parameter pointing to a credential ID + type. Secret values never appear in workflow JSON. Exporting a workflow leaks the *reference*, not the secret.
 
 For the full model (SDK resolution, rotation, project scoping), see `references/CREDENTIAL_SYSTEM.md`.
+
+The same credential can also power discovery. When a node has a resource-locator or load-options field, use `explore_node_resources` with the credential ID to fetch the real values from that account.
 
 ## Decision tree: how to authenticate this thing
 
@@ -85,8 +88,9 @@ Common case: the user wants a service n8n has no node for. Use HTTP Request with
 |---|---|---|
 | Pasting `sk-...` into HTTP Request's `Authorization` header value field | Token in plain text in the workflow JSON, leaks on export, copy, screenshot | Use a credential: `Bearer Auth` for bearer tokens, `Header Auth` for other custom auth schemes |
 | Storing token in a Set node and referencing via expression | Same problem, value lives in workflow JSON | Same fix: credential, not a Set node |
-| Storing a secret in `$vars.X` and reading it as the auth value | Not encrypted at rest, leaks in exports, no rotation | Use the right credential type (`httpBearerAuth`, `httpHeaderAuth`, `httpCustomAuth`, or the native one). For inbound webhook auth, use the trigger's `authentication` field, not an IF on `$vars.token` |
+| Storing a secret in `$vars.X` and reading it as the auth value | Not encrypted at rest, leaks on exports, no rotation | Use the right credential type (`httpBearerAuth`, `httpHeaderAuth`, `httpCustomAuth`, or the native one). For inbound webhook auth, use the trigger's `authentication` field, not an IF on `$vars.token` |
 | Reaching for `$env.X` to read a secret during custom auth setup | Doesn't work, throws at runtime | Use a credential of the appropriate type |
+| Asking the user for raw sheet/channel/database IDs before checking the credentialed account | Slows setup, encourages copy-paste mistakes, ignores live account metadata | `list_credentials` first, then `explore_node_resources` for live options |
 | Using HTTP Request when a native node exists | Loses auto-refresh on OAuth, loses native error handling, more code | Use the native node |
 | Hardcoding credentials in SDK code (`new HttpRequest({ headers: { Authorization: 'Bearer xxx' } })`) | Same leak surface | Use `newCredential()` in SDK code |
 | Asking the user to create a credential without naming the credential *type* | User picks the wrong type, auth fails confusingly | Always specify: "create a credential of type `<exact type name>`" |

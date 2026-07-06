@@ -103,6 +103,7 @@ Tool names are shown without the MCP prefix. The qualified name is `mcp__<server
 | `validate_node_config` | Schema-only validation of node configs (1-50 per call). Per-parameter errors, no graph noise. Side-channel for iteration/debug; `validate_workflow` still gates publish. For ai_tool subnodes set `isToolNode: true`. |
 | `validate_workflow` | Validate full SDK code before create/update. Necessary but **not sufficient**: doesn't catch all wiring traps (`.to()`, merge index). |
 | `list_credentials` | List accessible credentials (filter by type/project/etc). Returns metadata only, **never secret values**. Discover IDs before binding via `setNodeCredential`. |
+| `explore_node_resources` | Resolve live resource-locator and load-options values (sheet names, channels, models) through a credential. Use after `get_node_types` when a field needs a real ID or option value. |
 
 ### Workflow testing & execution
 
@@ -133,8 +134,9 @@ For any n8n task:
 2. **Invoke the skill via the Skill tool** before the first MCP call. Don't call n8n MCP tools blind.
 3. **Read the SDK reference once per session** before writing workflow code (`get_sdk_reference`). The most efficient way to avoid SDK-shape mistakes.
 4. **Get node types before configuring any node** (`get_node_types`). Guessing parameter names creates invalid workflows, sometimes silently.
-5. **Validate before publish, verify after create/update.** Validation catches schema errors. Verification (pulling the workflow back via `get_workflow_details`) catches connection bugs validation misses.
-6. **Surface drift when you spot it.** If a tool or parameter doesn't match what a skill says, tell the user. Updates may be needed.
+5. **Resolve live dropdown/resource-locator values before filling IDs.** When `get_node_types` shows a load-options or resource-locator field, use `explore_node_resources` with a real credential instead of guessing or asking for raw IDs first.
+6. **Validate before publish, verify after create/update.** Validation catches schema errors. Verification (pulling the workflow back via `get_workflow_details`) catches connection bugs validation misses.
+7. **Surface drift when you spot it.** If a tool or parameter doesn't match what a skill says, tell the user. Updates may be needed.
 
 ## Reporting skills used
 

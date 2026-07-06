@@ -19,6 +19,7 @@ Don't guess, use the `get_node_types` tool.
 
 - **Configure operation-first.** Set `resource` and `operation` first, and conditional parameters become visible. Most "field doesn't exist" errors are really "you haven't set the parent operation yet."
 - **Don't carry parameters across operations.** When changing `operation`, re-derive from the new shape. Stale parameters from the previous operation trip validation.
+- **Use `explore_node_resources` for live option lists.** If a field is a resource locator or load-options dropdown, resolve it from the credentialed account instead of guessing IDs or asking for them up front.
 
 ## The flow for any new node
 
@@ -28,13 +29,27 @@ Don't guess, use the `get_node_types` tool.
 2. Pick the right (resource, operation) for the task.
 3. get_node_types([{ name: '...', resource: '...', operation: '...' }])
    → returns exact parameter shape including conditional fields
-4. Build the node config from that shape.
-5. validate_workflow → fix errors.
-6. get_workflow_details → inspect the saved config; confirm parameters landed.
-7. test_workflow with pinned data → confirm runtime behavior.
+4. If the shape includes a resource locator or load-options field, call `explore_node_resources` with the exact method name and a real credential ID.
+5. Build the node config from that shape.
+6. validate_workflow → fix errors.
+7. get_workflow_details → inspect the saved config; confirm parameters landed.
+8. test_workflow with pinned data → confirm runtime behavior.
 ```
 
 Skipping any step compounds the next. The most common skip is step 3, leading to "Cannot read property X" errors that are really "you didn't pass the discriminators."
+
+### Resource locators and load-options
+
+Some node fields are not free-text IDs. They are populated from the connected account: sheet tabs, Slack channels, model lists, Notion databases.
+
+Pattern:
+
+1. Use `get_node_types` to find the exact annotated method name.
+2. Discover or confirm the credential with `list_credentials`.
+3. Call `explore_node_resources` with that credential, the method name, and any already-selected parent fields in `currentNodeParameters`.
+4. Use the returned real value in the node config.
+
+If you skip this and type IDs from memory, you usually get validator-passing configs that fail at runtime or point at the wrong resource.
 
 ### `validate_node_config` as a side-channel
 
@@ -103,6 +118,7 @@ Per-category gotchas. Read the file for the node type you're configuring:
 |---|---|---|
 | Building node config from memory of how the node looked last year | Parameter shape has drifted, validation fails with cryptic errors | Always `get_node_types` per session per node |
 | Skipping discriminators in `get_node_types` | Get generic shape, miss operation-specific required fields | Always pass `resource` + `operation` (and `mode` where present) |
+| Guessing sheet/channel/database IDs for a resource-locator field | Wrong option value, runtime failure, or wrong target resource | Use `explore_node_resources` with the node's exact method name and credential |
 | Copying a node config from one operation to another and tweaking | Stale parameters trip validation, and conditional fields don't apply | Re-derive from the new operation's shape |
 | Hardcoding tokens / credentials in node text fields | Leaks on export. See `n8n-credentials-and-security` | Always credentials |
 | Not testing the node with `test_workflow` after configuring | Runtime errors only surface on real data | Always test with pinned data before publish |
