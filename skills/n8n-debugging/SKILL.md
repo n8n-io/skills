@@ -54,7 +54,7 @@ Vague ("it's broken") becomes tractable when concrete ("email sends to wrong add
 ### Step 2: check the execution
 
 ```
-get_execution({ id: <execution_id> })
+get_execution({ executionId: <execution_id>, workflowId: <workflow_id>, includeData: true })
 ```
 
 Look at:
@@ -68,7 +68,7 @@ No execution ID? Ask the user to re-run.
 ### Step 3: re-fetch the workflow
 
 ```
-get_workflow_details({ id: <workflow_id> })
+get_workflow_details({ workflowId: <workflow_id> })
 ```
 
 Confirm the actual current state. The user might be looking at a different workflow or remembering a stale version.

@@ -80,7 +80,7 @@ Pinning and disabling are revertable. Sandbox credentials are infrastructure and
 
 ## Inspection after testing
 
-`test_workflow` returns an execution ID. `get_execution(id)` exposes per-node input/output. Walk through:
+`test_workflow` returns an execution ID. `get_execution({ executionId, workflowId, includeData: true })` exposes per-node input/output. Walk through:
 
 - Per-node output shape matches intent.
 - Errors caught by error branches fired correctly, not silently.

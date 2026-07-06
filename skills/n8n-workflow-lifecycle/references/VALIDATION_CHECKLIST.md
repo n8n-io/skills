@@ -91,7 +91,7 @@ Quick pass:
 - Workflow name follows the verb-first pattern (`NAMING_CONVENTIONS.md`). Sub-workflows are tagged (`subworkflow`, a domain tag, `tool`) since that's how `search_workflows({ tags })` finds them.
 - `description` is set and captures both *what* and *why*, with searchable keywords.
 - Nodes are renamed from defaults.
-- Workflows past ~10 nodes group their logical steps into node groups (`setNodeGroups`); collapsed, the canvas reads as steps. See `SKILL.md` "Readability".
+- Workflows past ~10 nodes group their logical steps into node groups (`setNodeGroups`). Ungrouped still runs, but a large ungrouped canvas is hard to read and maintain, so take it seriously. See `SKILL.md` "Readability".
 
 These don't block publish technically, but workflows without them rot faster.
 

@@ -31,7 +31,7 @@ Don't guess, use the `get_node_types` tool.
 3. get_node_types([{ name: '...', resource: '...', operation: '...' }])
    → returns exact parameter shape including conditional fields
 4. For any RLC / load-options param in that shape, ground the real value:
-   explore_node_resources({ nodeType, version, methodName, methodType, credentialType, credentialId })
+   explore_node_resources({ nodeType, version, methodName, methodType, credentialType, credentialId, currentNodeParameters? })
    → use a returned `value`. Don't invent IDs.
 5. Build the node config from that shape.
 6. validate_workflow → fix errors.

@@ -18,7 +18,7 @@ Walk the list top to bottom. For each item, inspect the workflow (`get_workflow_
 
 Before walking the per-domain list:
 
-- [ ] **Pull the workflow(s).** `get_workflow_details({ id })`, required so subsequent checks operate on the actual JSON, not assumptions.
+- [ ] **Pull the workflow(s).** `get_workflow_details({ workflowId })`, required so subsequent checks operate on the actual JSON, not assumptions.
 - [ ] **High-level intent / logic smell test.** Read the workflow's `description` (if it exists), then trace the happy path once top to bottom. Does the structure match what the description says it does? Anything obviously dead, missing, contradictory, or not fitting (a write node in a workflow described as read-only, a fan-out with one terminal branch that should be wired further, an HTTP call to a domain unrelated to the stated integration)? Catches whole classes of issues the per-domain checks won't surface.
 - [ ] **Note the trigger type.** Webhook, schedule, manual, sub-workflow, chat trigger. Severity of issues changes by trigger (a webhook-API workflow needs error paths; a manual run does not).
 - [ ] **Note whether the workflow is active.** Active/published workflows with broken connections are higher severity.
@@ -240,7 +240,7 @@ The system prompt is the load-bearing config of an agent. Severity ranges by how
 ### Readability
 
 - [ ] **Workflow over ~5 nodes with no sticky notes.** Reader has to read every node to find what they want. → [SKILL.md "Readability"](../SKILL.md)
-- [ ] **Workflow over ~10 nodes whose logical steps aren't grouped into node groups.** Collapsed groups make the canvas read as steps, not nodes. → [SKILL.md "Readability"](../SKILL.md)
+- [ ] **Workflow over ~10 nodes (n8n 2.28+) whose logical steps aren't grouped into node groups.** Collapsed groups make the canvas read as steps, not nodes. Skip on older instances, where node groups don't exist. → [SKILL.md "Readability"](../SKILL.md)
 - [ ] **Sticky title re-states what's visible** (`Set, If, Set` vs. `Validate input`). Title with the *purpose*. → [SKILL.md "Readability"](../SKILL.md)
 - [ ] **Sticky colors used inconsistently.** One color per category (processing / errors / TODOs); otherwise color is noise. → [SKILL.md "Readability"](../SKILL.md)
 - [ ] **Workflow `description` is empty, one sentence, or doesn't capture the *why*.** Two sentences: what it does, why it exists. → [SKILL.md "Readability"](../SKILL.md)
