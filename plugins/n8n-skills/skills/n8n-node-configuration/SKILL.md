@@ -15,6 +15,8 @@ Don't guess, use the `get_node_types` tool.
 
 **The live `get_node_types` output is the canonical parameter shape.** The references in this skill cover patterns, gotchas, security rules, and decision-making (when to use which operation, why credentials over text fields, engine retry caps, etc.) not parameter names or field structures. If a reference example conflicts with what `get_node_types` returns, trust the tool. Markdown drifts; the type def is generated from the live source.
 
+**Never guess resource-locator or load-options values.** When `get_node_types` shows a param with `@searchListMethod` or `@loadOptionsMethod` (Slack channels, Sheets tabs/docs, DB tables/columns, model lists, labels), resolve the real value with `explore_node_resources` (pass a `credentialId` from `list_credentials`) and use a returned `value`. If you already know the exact ID, use it; if several match and intent is ambiguous, ask the user. An invented ID validates but points at nothing. Exception: `toolWorkflow.workflowId` has no search method, resolve it via `search_workflows` and use `mode: 'id'`.
+
 ## Strong defaults
 
 - **Configure operation-first.** Set `resource` and `operation` first, and conditional parameters become visible. Most "field doesn't exist" errors are really "you haven't set the parent operation yet."
@@ -28,10 +30,13 @@ Don't guess, use the `get_node_types` tool.
 2. Pick the right (resource, operation) for the task.
 3. get_node_types([{ name: '...', resource: '...', operation: '...' }])
    → returns exact parameter shape including conditional fields
-4. Build the node config from that shape.
-5. validate_workflow → fix errors.
-6. get_workflow_details → inspect the saved config; confirm parameters landed.
-7. test_workflow with pinned data → confirm runtime behavior.
+4. For any RLC / load-options param in that shape, ground the real value:
+   explore_node_resources({ nodeType, version, methodName, methodType, credentialType, credentialId })
+   → use a returned `value`. Don't invent IDs.
+5. Build the node config from that shape.
+6. validate_workflow → fix errors.
+7. get_workflow_details → inspect the saved config; confirm parameters landed.
+8. test_workflow with pinned data → confirm runtime behavior.
 ```
 
 Skipping any step compounds the next. The most common skip is step 3, leading to "Cannot read property X" errors that are really "you didn't pass the discriminators."
@@ -81,6 +86,8 @@ Examples:
 - Slack `messageType: 'block'` enables block-builder fields absent from `messageType: 'text'`.
 
 Always inspect via `get_node_types` for the specific operation. Don't reuse a config from a different operation and expect it to validate.
+
+Options-from-another-field is a `@loadOptionsMethod`: resolve the live options with `explore_node_resources` (`methodType: 'loadOptions'`), passing prior selections via `currentNodeParameters` when the method depends on them (e.g. listing a spreadsheet's tabs needs `documentId`).
 
 ## Reference files
 
