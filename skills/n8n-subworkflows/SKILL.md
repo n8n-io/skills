@@ -33,7 +33,7 @@ About to write a chunk of logic?
 │   └── No → keep inline
 │
 ├── Is this chunk >5 nodes and conceptually one thing?
-│   └── Probably yes-extract, even if reuse isn't certain. It's still better isolated.
+│   └── Extract if you want testability, isolation, or reuse; if it's only for a cleaner canvas, group it inline instead (see below).
 │
 ├── Is this chunk dealing with a generic concern (auth, retry, parsing, formatting)?
 │   └── Almost certainly extract. These are the canonical reusable sub-workflows.
@@ -41,6 +41,8 @@ About to write a chunk of logic?
 └── Is this chunk doing one HTTP call with no logic around it?
     └── Don't extract. Extra workflow boundary for nothing.
 ```
+
+When the only motivation is a cleaner canvas (not reuse, isolation, testability, or an agent tool), a **canvas node group** is the required tool for readability-only sectioning: faster (no sub-execution per call) and simpler (no input/output contract), with the logic staying inline. Group it. Extract to a sub-workflow only when you genuinely need reuse, isolation, independent testing, or an agent tool. See `n8n-workflow-lifecycle` Readability.
 
 ## Stateless vs. stateful sub-workflows
 
@@ -83,15 +85,12 @@ The two main signals:
 
 ### 1. Conceptual coherence
 
-When a chunk of nodes does one logical thing, even unreused, it's often worth extracting. Beyond reuse:
+When a chunk of nodes does one logical thing, even unreused, extraction can be worth it for:
 
-- **Readability.** The caller sees one node ("Parse date") instead of five.
 - **Testability.** Run the sub-workflow on its own with pinned data.
 - **Replaceability.** Swapping implementations doesn't ripple to callers.
 
-Cost: an extra workflow boundary.
-
-For most 5+ node chunks doing one logical thing, extraction is worth it.
+Readability alone is not a reason to extract: a node group collapses five nodes into one labeled box more cheaply (no sub-execution, no input/output contract). Extract when you also want testability, replaceability, or reuse.
 
 ### 1.5 The fire-and-forget audit-log pattern
 
@@ -179,11 +178,11 @@ Each "logical step" is a sub-workflow call. The caller is a long but linear narr
 This is *not* the same as a 20-node workflow with 20 inline transformations. That's hard to read. The pattern above is fine because:
 
 - Each node has one purpose (call a specific sub-workflow).
-- Sticky notes group sections (per `n8n-workflow-lifecycle` "Readability").
+- Sticky notes and node groups mark sections (per `n8n-workflow-lifecycle` "Readability").
 - Inspecting a section means opening the sub-workflow it calls. That's encapsulation.
 - Orchestration logic at the top level is visible without reading implementations.
 
-If your workflow has 15+ nodes and isn't mostly Execute Workflow calls and branches, extract more.
+If your workflow has 15+ nodes and isn't mostly Execute Workflow calls and branches, extract more where reuse or testing warrants it, and group the rest inline (node groups).
 
 ## When NOT to extract
 

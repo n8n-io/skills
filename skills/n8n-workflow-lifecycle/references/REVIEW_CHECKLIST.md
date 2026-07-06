@@ -240,6 +240,7 @@ The system prompt is the load-bearing config of an agent. Severity ranges by how
 ### Readability
 
 - [ ] **Workflow over ~5 nodes with no sticky notes.** Reader has to read every node to find what they want. → [SKILL.md "Readability"](../SKILL.md)
+- [ ] **Workflow over ~10 nodes whose logical steps aren't grouped into node groups.** Collapsed groups make the canvas read as steps, not nodes. → [SKILL.md "Readability"](../SKILL.md)
 - [ ] **Sticky title re-states what's visible** (`Set, If, Set` vs. `Validate input`). Title with the *purpose*. → [SKILL.md "Readability"](../SKILL.md)
 - [ ] **Sticky colors used inconsistently.** One color per category (processing / errors / TODOs); otherwise color is noise. → [SKILL.md "Readability"](../SKILL.md)
 - [ ] **Workflow `description` is empty, one sentence, or doesn't capture the *why*.** Two sentences: what it does, why it exists. → [SKILL.md "Readability"](../SKILL.md)
