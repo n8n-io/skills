@@ -20,7 +20,7 @@ The display name and the internal value don't always match. "Send a message" →
 
 ### `select`: channel vs DM
 
-`select` determines whether the next field is `channelId` or `user`. Don't mix; only one applies per `select` value.
+`select` determines whether the next field is `channelId` or `user`. Don't mix; only one applies per `select` value. Both are `@searchListMethod` lookups (`getChannels` / `getUsers`): after `get_node_types`, resolve the real ID via `explore_node_resources`.
 
 ### Block Kit messages
 
@@ -46,7 +46,7 @@ Without `thread_ts`, the "reply" posts as a top-level channel message. Inspect v
 
 ### Operation values: "Get Many" → `'getAll'`
 
-Not `'getMany'`. Display name vs internal value mismatch. Common operations: `'send'` (default), `'reply'`, `'getAll'`, `'addLabels'`, `'removeLabels'`, `'get'`, `'delete'`, `'markAsRead'`, `'markAsUnread'`.
+Not `'getMany'`. Display name vs internal value mismatch. Common operations: `'send'` (default), `'reply'`, `'getAll'`, `'addLabels'`, `'removeLabels'`, `'get'`, `'delete'`, `'markAsRead'`, `'markAsUnread'`. `addLabels`/`removeLabels` take a `labelIds` load-options field: resolve real label IDs via `explore_node_resources` (`loadOptions`).
 
 ### What lives at top level vs under `options`
 

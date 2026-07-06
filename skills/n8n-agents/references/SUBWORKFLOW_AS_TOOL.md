@@ -55,7 +55,7 @@ const generateImageTool = tool({
     type: '@n8n/n8n-nodes-langchain.toolWorkflow',
     config: {
         parameters: {
-            workflowId: { __rl: true, value: '<sub-workflow-id>', mode: 'list' },
+            workflowId: { __rl: true, value: '<sub-workflow-id>', mode: 'id' }, // no @searchListMethod on this RLC: get the real ID from search_workflows
             workflowInputs: {
                 mappingMode: 'defineBelow',
                 value: {
@@ -125,7 +125,7 @@ const generateOrEditImage = tool({
         name: 'Generate or Edit Image',
         parameters: {
             description: 'Use to create a new image from a prompt OR edit an existing image. Pass imageName as the storage key (e.g. "abc123.png") to edit; leave empty to generate from scratch.',
-            workflowId: { value: '<id>', ... },
+            workflowId: { value: '<id>', ... }, // real ID from search_workflows (no @searchListMethod)
             workflowInputs: {
                 mappingMode: 'defineBelow',
                 value: {
