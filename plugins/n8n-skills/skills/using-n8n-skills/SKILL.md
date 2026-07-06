@@ -82,24 +82,25 @@ Tool names are shown without the MCP prefix. The qualified name is `mcp__<server
 
 | Tool | What it does |
 |---|---|
-| `search_workflows` | Search workflows across the instance by `query` (substring on name/description) and/or `tags` (exact tag names, AND semantics: must have all). The **only** cross-workflow tool. Use it to discover what already exists. |
+| `search_workflows` | Search workflows across the instance by `query` (substring on name/description) and/or `tags` (exact tag names, AND semantics: must have all). The primary cross-workflow **discovery** tool. Use it to discover what already exists. |
 | `get_workflow_details` | Fetch a workflow's full JSON by ID. Use after every create/update to verify connections. |
 | `search_folders` | List folders. **You cannot create or move folders.** You can only place workflows into folders that already exist. |
 | `search_projects` | List projects. |
 | `list_tags` | List all workflow tags (with `usageCount` per tag). Check the instance's tag vocabulary before tagging or filtering, so you reuse exact names. Tags are attached/detached via `update_workflow` `addTags`/`removeTags`; there's no tag rename/delete tool. |
-| `archive_workflow` / `publish_workflow` / `unpublish_workflow` | Soft-delete / activate / deactivate. Validate before publish. |
+| `archive_workflow` / `publish_workflow` / `unpublish_workflow` | Soft-delete / activate / deactivate. Validate before publish. `publish_workflow` takes an optional `versionId` to re-publish a specific version. |
 | `search_executions` | Search executions across the instance (filter by status, workflow, time range). Use for "list recent runs" / "failures in the last hour". Single executions: `get_execution`. |
 
 ### Workflow building
 
 | Tool | What it does |
 |---|---|
-| `get_sdk_reference` | Fetch the n8n Workflow SDK reference. **Read this before writing workflow code.** Sections include `guidelines` and `design`. |
+| `get_sdk_reference` | Fetch the n8n Workflow SDK reference. **Read this before writing workflow code.** Sections: `patterns`, `patterns_detailed`, `expressions`, `functions`, `rules`, `import`, `guidelines`, `design`, `all`. |
 | `get_workflow_best_practices` | Fetch best-practices for a workflow technique. Call once per technique before searching nodes. `technique: "list"` discovers what's available. |
 | `search_nodes` | Discover nodes by capability (e.g. "gmail", "slack", "schedule trigger"). Returns IDs plus discriminators (resource/operation/mode). |
 | `get_node_types` | Fetch exact TypeScript parameter definitions for node IDs. **Required before configuring any node.** Don't guess parameter names. |
+| `explore_node_resources` | Resolve the real values behind resource-locator (`@searchListMethod`) and load-options (`@loadOptionsMethod`) params: Slack channels, Sheets tabs/docs, DB tables/columns, model lists, labels. Needs a `credentialId` from `list_credentials`. Call after `get_node_types` to ground dropdown values instead of inventing IDs. |
 | `create_workflow_from_code` | Save a workflow from SDK code. Always include a 1-2 sentence `description`. Pass `skillsUsed` (below). |
-| `update_workflow` | Apply atomic ops to an existing workflow (max 100, all-or-nothing): node/connection CRUD, credential binding, settings, metadata, tags (`addTags`/`removeTags`, auto-creating unknown names). Saves a draft; needs `publish_workflow` to go live. Pass `skillsUsed` (below). |
+| `update_workflow` | Apply atomic ops (max 100, all-or-nothing): node/connection CRUD, `setNodeCredential`, `setNodeSettings` (per-node onError/retry/executeOnce), `setWorkflowSettings` (errorWorkflow, timezone, callerPolicy, timeouts; n8n 2.29.0+), `setNodeGroups` (canvas grouping), `setWorkflowMetadata`, `addTags`/`removeTags` (auto-create unknown names). Saves a draft; needs `publish_workflow` to go live. Pass `skillsUsed` (below). |
 | `validate_node_config` | Schema-only validation of node configs (1-50 per call). Per-parameter errors, no graph noise. Side-channel for iteration/debug; `validate_workflow` still gates publish. For ai_tool subnodes set `isToolNode: true`. |
 | `validate_workflow` | Validate full SDK code before create/update. Necessary but **not sufficient**: doesn't catch all wiring traps (`.to()`, merge index). |
 | `list_credentials` | List accessible credentials (filter by type/project/etc). Returns metadata only, **never secret values**. Discover IDs before binding via `setNodeCredential`. |
@@ -110,8 +111,8 @@ Tool names are shown without the MCP prefix. The qualified name is `mcp__<server
 |---|---|
 | `prepare_test_pin_data` | Returns JSON Schemas (not data) for nodes that need pinning: triggers, credentialed nodes, and HTTP Request. You generate sample values. |
 | `test_workflow` | Run with the pin data you supply. **Auto-pins triggers, credentialed nodes, and HTTP Request.** Code, Edit Fields, If, Data Tables, Execute Command, file ops, and sub-workflow calls run for real. Ask before running if any not-auto-pinned node has side effects. Pin data is per-execution only with no visual indicator in the execution viewer, so tell the user which nodes were pinned after the call. See `n8n-workflow-lifecycle` `references/TESTING.md`. |
-| `execute_workflow` | Production execution with the real trigger. Wire error handling first. Same side-effect rules as `test_workflow`. |
-| `get_execution` | Fetch a previous execution by ID. |
+| `execute_workflow` | Production execution with the real trigger. Wire error handling first. Same side-effect rules as `test_workflow`. `executionMode` picks `manual` (draft) vs `production` (published); structured `inputs` for chat/form/webhook triggers. Returns an execution ID immediately without waiting, poll `get_execution` for results. |
+| `get_execution` | Fetch an execution by `executionId` + `workflowId` (both required). Metadata only by default; set `includeData: true` (optionally `nodeNames`, `truncateData`) for node inputs/outputs. |
 
 ### Data tables
 
@@ -124,6 +125,14 @@ n8n's built-in tabular storage. **Not** an external service. Prefer over externa
 | `rename_data_table` / `rename_data_table_column` | Rename. |
 | `add_data_table_column` / `delete_data_table_column` | Schema changes. |
 | `add_data_table_rows` | Append rows. |
+
+### Version history
+
+| Tool | What it does |
+|---|---|
+| `get_workflow_history` | List a workflow's saved versions, newest first (n8n 2.29.0+). |
+| `get_workflow_version` | Fetch a past version's full content by `versionId`. |
+| `restore_workflow_version` | Re-apply a past version as the current draft (records a new history entry). |
 
 ## The protocol, in order
 
