@@ -47,7 +47,7 @@ Pattern:
 1. Use `get_node_types` to find the exact annotated method name.
 2. Discover or confirm the credential with `list_credentials`.
 3. Call `explore_node_resources` with that credential, the method name, and any already-selected parent fields in `currentNodeParameters`.
-4. Use the returned real value in the node config.
+4. Use the returned value in the node config. For resource-locator fields, preserve the full structured object (`__rl`, `mode`, `value`, and any cached metadata) returned by the tool—do not extract just a raw ID. For load-options fields, use the option value directly.
 
 If you skip this and type IDs from memory, you usually get validator-passing configs that fail at runtime or point at the wrong resource.
 
