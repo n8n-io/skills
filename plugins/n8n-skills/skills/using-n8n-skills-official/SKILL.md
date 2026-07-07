@@ -150,7 +150,7 @@ For any n8n task:
 
 `create_workflow_from_code` and `update_workflow` take an optional `skillsUsed: string[]`. Pass it every time so the n8n team can measure plugin impact on MCP output.
 
-- **Contents:** skills invoked while preparing this workflow change. Emit the **bare skill name** in lowercase kebab-case (e.g. `using-n8n-skills-official`, `n8n-workflow-lifecycle-official`), NOT a `plugin:skill` form. The tool drops non-kebab entries, and the `-official` suffix is what distinguishes these skills from other n8n skill packs in telemetry.
+- **Contents:** report each skill exactly as the Skill tool names it, keeping the `-official` suffix: `plugin:skill-official` when plugin-namespaced, else bare `skill-official`. The suffix marks these as ours (vs other n8n packs); the plugin prefix marks plugin vs raw-skill usage.
 - **Window:** skills invoked since the last successful create/update call. Resets after each.
 - **Limits:** max 50 entries, each max 128 chars.
 
