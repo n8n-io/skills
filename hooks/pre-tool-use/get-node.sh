@@ -54,7 +54,7 @@ WARNINGS=""
 # get_node_types call per session, since this reminder is general-purpose
 # and re-firing it adds nothing.
 if ! has_marker "node-config"; then
-  WARNINGS+="Before configuring nodes: invoke the n8n-node-configuration skill via the Skill tool. Operation-aware configuration, property dependencies, never assume parameters. Always inspect via the type definitions you're about to fetch."
+  WARNINGS+="Before configuring nodes: invoke the n8n-node-configuration-official skill via the Skill tool. Operation-aware configuration, property dependencies, never assume parameters. Always inspect via the type definitions you're about to fetch."
   set_marker "node-config"
 fi
 
@@ -67,7 +67,7 @@ if matches '(^|\.)set$'; then
   WARNINGS+="
 
 [Set node detected in this lookup]
-STOP and invoke the n8n-expressions skill via the Skill tool NOW. The most common antipattern in this whole pack: Set nodes feeding only ONE downstream consumer.
+STOP and invoke the n8n-expressions-official skill via the Skill tool NOW. The most common antipattern in this whole pack: Set nodes feeding only ONE downstream consumer.
 
 If the only purpose of this Set node is to map fields for the next node (before an Insert/Update Data Table node, before an Email/Slack body, before a Respond to Webhook, etc.), DELETE the Set node and put the expressions DIRECTLY in the next node's parameter slots. The Data Table Insert node has expression slots for every column. The Email node has an expression slot for the body. Use them.
 
@@ -78,7 +78,7 @@ if matches '(^|\.)code$'; then
   WARNINGS+="
 
 [Code node detected in this lookup]
-STOP and invoke the n8n-code-nodes skill via the Skill tool NOW. Decision order: expression first, then arrow function inside Edit Fields, THEN Code node only if those genuinely cannot do the job.
+STOP and invoke the n8n-code-nodes-official skill via the Skill tool NOW. Decision order: expression first, then arrow function inside Edit Fields, THEN Code node only if those genuinely cannot do the job.
 
 Default to JavaScript. Only use Python when the user explicitly asked for it (\"use Python\", \"I'm a Python shop\"). The user mentioning data analysis is NOT an explicit ask.
 
@@ -106,7 +106,7 @@ if matches '(^|\.)merge$'; then
   WARNINGS+="
 
 [Merge node detected in this lookup]
-STOP and invoke the n8n-node-configuration skill via the Skill tool, especially references/MERGE_NODE.md, NOW. Two silent failure modes:
+STOP and invoke the n8n-node-configuration-official skill via the Skill tool, especially references/MERGE_NODE.md, NOW. Two silent failure modes:
 
 1. Merge defaults to 2 inputs. If 3+ sources converge into this Merge, set numberOfInputs explicitly (or the equivalent param on your n8n version) to match. Otherwise the third+ sources silently drop at runtime even though the connection lines are drawn.
 
@@ -117,7 +117,7 @@ if matches '(^|\.)splitInBatches$'; then
   WARNINGS+="
 
 [Loop Over Items (splitInBatches) detected in this lookup]
-STOP and invoke the n8n-loops skill via the Skill tool NOW.
+STOP and invoke the n8n-loops-official skill via the Skill tool NOW.
 
 First question: do you actually need this? Default per-item iteration probably handles your case WITHOUT a Loop Over Items node. Just connect the source to the consumer; n8n iterates automatically. Loop Over Items is for: rate limiting (process N at a time with a Wait between), chunked bulk API calls, per-batch error handling, polling a long-running job (with reset: true and a \$runIndex safety ceiling).
 
@@ -128,7 +128,7 @@ if matches '(^|\.)dateTime$'; then
   WARNINGS+="
 
 [DateTime node detected in this lookup]
-STOP. The DateTime node is almost always wrong. Invoke the n8n-expressions skill via the Skill tool NOW.
+STOP. The DateTime node is almost always wrong. Invoke the n8n-expressions-official skill via the Skill tool NOW.
 
 Date math, formatting, and parsing all work in Luxon expressions inline at the consumer field:
   {{ DateTime.fromISO(\$('Source').item.json.created_at).toFormat('yyyy-MM-dd') }}
@@ -141,7 +141,7 @@ if matches '(^|\.)dataTable$'; then
   WARNINGS+="
 
 [Data Table node detected in this lookup]
-STOP and invoke the n8n-data-tables skill via the Skill tool NOW. Several gotchas that catch people:
+STOP and invoke the n8n-data-tables-official skill via the Skill tool NOW. Several gotchas that catch people:
 
 1. THREE COLUMNS ARE SYSTEM-MANAGED: id (auto-serial), createdAt, updatedAt. Don't declare them; they're always there. Use them in queries.
 

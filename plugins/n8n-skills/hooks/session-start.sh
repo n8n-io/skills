@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SessionStart hook for n8n-skills.
-# Loads the meta-skill (using-n8n-skills) into every session via additionalContext.
+# Loads the meta-skill (using-n8n-skills-official) into every session via additionalContext.
 # Re-fires on resume/clear/compact so the protocol survives compaction.
 #
 # On `clear` and `compact`, also wipes the PreToolUse hook markers for this
@@ -14,7 +14,7 @@
 set -uo pipefail
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
-META_SKILL="${PLUGIN_ROOT}/skills/using-n8n-skills/SKILL.md"
+META_SKILL="${PLUGIN_ROOT}/skills/using-n8n-skills-official/SKILL.md"
 CACHE_DIR="${HOME}/.cache/n8n-skills"
 mkdir -p "${CACHE_DIR}" 2>/dev/null || true
 

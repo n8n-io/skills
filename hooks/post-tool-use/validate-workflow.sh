@@ -6,16 +6,16 @@
 # the depth; this hook just routes the agent to them.
 #
 # Conditional rules (which skills get suggested):
-# - n8n-node-configuration MERGE_NODE.md: Merge present
-# - n8n-expressions: Set OR DateTime OR $json. usage (consolidated reasons)
-# - n8n-code-nodes: Code node present
-# - n8n-loops: splitInBatches present, OR HTTP Request present (pagination)
-# - n8n-subworkflows: executeWorkflowTrigger present
-# - n8n-data-tables: dataTable present
-# - n8n-credentials-and-security: newCredential() OR HTTP OR webhook OR respond
-# - n8n-error-handling: webhook OR respond OR scheduleTrigger OR chatTrigger OR agent
-# - n8n-workflow-lifecycle (readability): more than 6 nodes
-# - n8n-agents: LangChain agent node present
+# - n8n-node-configuration-official MERGE_NODE.md: Merge present
+# - n8n-expressions-official: Set OR DateTime OR $json. usage (consolidated reasons)
+# - n8n-code-nodes-official: Code node present
+# - n8n-loops-official: splitInBatches present, OR HTTP Request present (pagination)
+# - n8n-subworkflows-official: executeWorkflowTrigger present
+# - n8n-data-tables-official: dataTable present
+# - n8n-credentials-and-security-official: newCredential() OR HTTP OR webhook OR respond
+# - n8n-error-handling-official: webhook OR respond OR scheduleTrigger OR chatTrigger OR agent
+# - n8n-workflow-lifecycle-official (readability): more than 6 nodes
+# - n8n-agents-official: LangChain agent node present
 #
 # Header and closing gate fire always.
 # Fires every call (no dedup).
@@ -34,7 +34,7 @@ if [ -z "$CODE" ]; then
   jq -n '{
     hookSpecificOutput: {
       hookEventName: "PostToolUse",
-      additionalContext: "[validate_workflow returned. Validation is necessary, not sufficient.] If n8n-workflow-lifecycle is not already in your context, load it via the Skill tool and walk references/VALIDATION_CHECKLIST.md section 2 before publish."
+      additionalContext: "[validate_workflow returned. Validation is necessary, not sufficient.] If n8n-workflow-lifecycle-official is not already in your context, load it via the Skill tool and walk references/VALIDATION_CHECKLIST.md section 2 before publish."
     }
   }'
   exit 0
@@ -99,7 +99,7 @@ DETECTED=""
 [ $HAS_SCHEDULE -eq 1 ]       && DETECTED+=" Schedule"
 [ -z "$DETECTED" ] && DETECTED=" (none of the high-risk node types)"
 
-# Consolidate n8n-expressions reasons (Set, DateTime, $json all route to it)
+# Consolidate n8n-expressions-official reasons (Set, DateTime, $json all route to it)
 EXPR_REASONS=""
 [ $HAS_SET -eq 1 ]            && EXPR_REASONS+="Set antipattern, "
 [ $HAS_DATETIME -eq 1 ]       && EXPR_REASONS+="DateTime → Luxon, "
@@ -111,25 +111,25 @@ EXPR_REASONS="${EXPR_REASONS%, }"
 # Use literal newlines inside double quotes to avoid ANSI-C quoting hassles.
 SUGGESTIONS=""
 [ $INCLUDE_MERGE_NODE -eq 1 ]     && SUGGESTIONS+="
-- n8n-node-configuration references/MERGE_NODE.md (Merge: numberOfInputs vs wire count, useDataOfInput off-by-one)"
+- n8n-node-configuration-official references/MERGE_NODE.md (Merge: numberOfInputs vs wire count, useDataOfInput off-by-one)"
 [ -n "$EXPR_REASONS" ]            && SUGGESTIONS+="
-- n8n-expressions (${EXPR_REASONS})"
+- n8n-expressions-official (${EXPR_REASONS})"
 [ $HAS_CODE -eq 1 ]               && SUGGESTIONS+="
-- n8n-code-nodes (Code detected: alternatives review)"
+- n8n-code-nodes-official (Code detected: alternatives review)"
 [ $INCLUDE_LOOP -eq 1 ]           && SUGGESTIONS+="
-- n8n-loops (Loop Over Items / pagination)"
+- n8n-loops-official (Loop Over Items / pagination)"
 [ $HAS_SUBWF_TRIGGER -eq 1 ]      && SUGGESTIONS+="
-- n8n-subworkflows (sub-workflow trigger: Define Below mode + return-shape rules)"
+- n8n-subworkflows-official (sub-workflow trigger: Define Below mode + return-shape rules)"
 [ $HAS_DATATABLE -eq 1 ]          && SUGGESTIONS+="
-- n8n-data-tables (Data Table: schema, dedup, _object column rules)"
+- n8n-data-tables-official (Data Table: schema, dedup, _object column rules)"
 [ $INCLUDE_CREDENTIALS -eq 1 ]    && SUGGESTIONS+="
-- n8n-credentials-and-security (auth surface present)"
+- n8n-credentials-and-security-official (auth surface present)"
 [ $INCLUDE_ERROR_HANDLING -eq 1 ] && SUGGESTIONS+="
-- n8n-error-handling (unattended / webhook workflow: error branches required)"
+- n8n-error-handling-official (unattended / webhook workflow: error branches required)"
 [ $INCLUDE_DESIGN -eq 1 ]         && SUGGESTIONS+="
-- n8n-workflow-lifecycle (>6 nodes: sticky notes, descriptions capturing the why)"
+- n8n-workflow-lifecycle-official (>6 nodes: sticky notes, descriptions capturing the why)"
 [ $HAS_AGENT -eq 1 ]              && SUGGESTIONS+="
-- n8n-agents (LangChain agent detected)"
+- n8n-agents-official (LangChain agent detected)"
 
 # Compose final output. If nothing relevant was detected, just header + footer.
 if [ -z "$SUGGESTIONS" ]; then
@@ -137,7 +137,7 @@ if [ -z "$SUGGESTIONS" ]; then
 [validate_workflow returned. Validation is necessary, not sufficient.]
 Workflow analyzed: ${NODE_COUNT} node(s); detected:${DETECTED}.
 
-No high-risk patterns surfaced. If anything in this workflow is non-trivial, load n8n-workflow-lifecycle via the Skill tool and walk references/VALIDATION_CHECKLIST.md section 2 before publish.
+No high-risk patterns surfaced. If anything in this workflow is non-trivial, load n8n-workflow-lifecycle-official via the Skill tool and walk references/VALIDATION_CHECKLIST.md section 2 before publish.
 EOF
 )
 else

@@ -69,31 +69,31 @@ Compatibility varies by agent. Check skills.sh for support on your specific plat
 
 ```markdown
 This project uses n8n. When working with workflows, nodes, expressions, or
-the n8n MCP tools, always start by loading the `using-n8n-skills` meta-skill
+the n8n MCP tools, always start by loading the `using-n8n-skills-official` meta-skill
 and follow its routing into the matching capability skill before acting.
 ```
 
-> *The plugins ship a SessionStart hook that loads the entry-point skill for you. Plain skill installs don't have that hook, so the snippet is what cues your agent to start every n8n task by loading `using-n8n-skills`.*
+> *The plugins ship a SessionStart hook that loads the entry-point skill for you. Plain skill installs don't have that hook, so the snippet is what cues your agent to start every n8n task by loading `using-n8n-skills-official`.*
 
 ## Skills inside
 
 | Skill | When it activates |
 |---|---|
-| `n8n-workflow-lifecycle` | Starting, designing, organizing, or finishing a workflow |
-| `n8n-subworkflows` | Anything reusable, multi-step builds |
-| `n8n-extending-mcp` | Need capabilities the MCP doesn't have |
-| `n8n-expressions` | Writing `{{}}`, `$json`, `$node` |
-| `n8n-node-configuration` | Configuring any node |
-| `n8n-code-nodes` | Custom logic, Code node consideration |
-| `n8n-loops` | Loops, batching, paginated APIs |
-| `n8n-agents` | LangChain Agent node, tools, system prompts, structured output |
-| `n8n-error-handling` | Webhook APIs, production workflows |
-| `n8n-credentials-and-security` | Auth, API keys, tokens |
-| `n8n-binary-and-data` | Files, images, attachments, vision |
-| `n8n-data-tables` | Data Tables: schemas, dedup, persistent state |
-| `n8n-debugging` | Things break |
+| `n8n-workflow-lifecycle-official` | Starting, designing, organizing, or finishing a workflow |
+| `n8n-subworkflows-official` | Anything reusable, multi-step builds |
+| `n8n-extending-mcp-official` | Need capabilities the MCP doesn't have |
+| `n8n-expressions-official` | Writing `{{}}`, `$json`, `$node` |
+| `n8n-node-configuration-official` | Configuring any node |
+| `n8n-code-nodes-official` | Custom logic, Code node consideration |
+| `n8n-loops-official` | Loops, batching, paginated APIs |
+| `n8n-agents-official` | LangChain Agent node, tools, system prompts, structured output |
+| `n8n-error-handling-official` | Webhook APIs, production workflows |
+| `n8n-credentials-and-security-official` | Auth, API keys, tokens |
+| `n8n-binary-and-data-official` | Files, images, attachments, vision |
+| `n8n-data-tables-official` | Data Tables: schemas, dedup, persistent state |
+| `n8n-debugging-official` | Things break |
 
-A 14th meta-skill, `using-n8n-skills`, is loaded by the SessionStart hook in plugins and routes your agent to the right capability skill on every n8n task.
+A 14th meta-skill, `using-n8n-skills-official`, is loaded by the SessionStart hook in plugins and routes your agent to the right capability skill on every n8n task.
 
 ## How it works
 
