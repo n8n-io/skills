@@ -80,6 +80,9 @@ For any workflow over ~5 nodes, four levers carry the readability load:
 
 - **Workflow `description`: capture the *why*, including AI-derived context.** Two sentences: what it does and why it exists. Most importantly, capture context you had during conversation that won't otherwise survive into the file (the constraint that drove the design, why this approach over the alternative, the user's reason for asking). Otherwise it dies with the chat.
 - **Node groups: group every logical step past ~10 nodes.** Partition the canvas into named groups, one per logical step (`Validate input`, `Enrich order`, `Notify`), via `update_workflow` `setNodeGroups` (n8n 2.28.0+). Each group must be a connected, trigger-free run with a single entry and exit (n8n rejects anything else); collapsed, the workflow reads as its steps, not its nodes. Where a section is too branchy to form one group, a sticky note marks it instead. Organization only, members run inline (reuse/isolation is a sub-workflow's job).
+
+  Each group also accepts an optional **`description`** string (shown when the group is collapsed). Use it to add a one-sentence summary of what the group does — especially useful for groups whose name alone doesn't convey the *why*. Blank or whitespace-only descriptions are ignored. Keep descriptions concise; they appear in a small collapsed label.
+
 - **Sticky notes: group nodes by purpose.** Use the `n8n-nodes-base.stickyNote` node with markdown `content` (`### Title` on the first line, 1-3 sentences of body) and an integer `color` 1-7. Title each with the purpose ("Validate input" not "If, Set, If"). Pick a small palette and stick to it (e.g. gray/yellow for processing, red for errors, pink for TODOs); random colors communicate nothing.
 - **Node `notes` for non-obvious config.** Explain *why* a workaround exists or a Code node does what it does. Don't annotate obvious nodes.
 
@@ -168,4 +171,3 @@ Keep it tight: half a dozen bullets, not a wall of text. The user shouldn't have
 | Sticky titled "Set, If, Set" or sticky-of-every-color | Re-states what's visible / color becomes pure noise | Title with the *purpose*; one color per category |
 | `description: "Sends Slack."` | Adds nothing visible from the trigger and Slack node | Include *why* + AI-derived context: "Sends weekly summary to founders. Replaces manual report that kept getting skipped." |
 | Designing fan-out branches as if they execute concurrently | n8n runs fan-out branches sequentially, top-to-bottom by Y-position. Total runtime is the sum of branches, not the max | For real concurrency, dispatch via `Execute Workflow` with `mode: 'each'` + `waitForSubWorkflow: false`. See `n8n-subworkflows-official` "Fire-and-forget parallelization" |
-
