@@ -1,6 +1,6 @@
 {
   "name": "n8n-skills",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Production-grade n8n workflow building skills. Pairs with the official n8n instance-level MCP server to teach your coding agent how to architect, validate, and ship workflows that work in production.",
   "author": {
     "name": "n8n",
