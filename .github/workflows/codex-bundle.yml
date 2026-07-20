@@ -1,7 +1,9 @@
 name: codex-bundle
 
-# Fails the build if plugins/n8n-skills/ has drifted from the canonical
-# hooks/ + skills/ trees. Regenerate locally with: bash scripts/sync-codex-bundle.sh
+# Keeps plugins/n8n-skills/ (the generated Codex bundle) in sync with the canonical
+# hooks/ + skills/ trees. On in-repo PRs it regenerates the bundle and commits it back
+# to the PR branch; on fork PRs and pushes to main it fails if the bundle is stale.
+# Regenerate locally with: bash scripts/sync-codex-bundle.sh
 
 on:
   pull_request:
@@ -13,16 +15,38 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   verify-bundle:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Check out the branch head (not the PR merge ref) so a regenerated bundle
+          # can be pushed back. Falls back to github.ref for push events.
+          ref: ${{ github.head_ref || github.ref }}
+          persist-credentials: true
       - name: Regenerate Codex bundle
         run: bash scripts/sync-codex-bundle.sh
-      - name: Fail if bundle is out of sync
+      - name: Sync or verify bundle
+        env:
+          IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
         run: |
-          if ! git diff --quiet; then
+          if git diff --quiet; then
+            echo "Codex bundle already in sync."
+            exit 0
+          fi
+          # In-repo PR branches: regenerate and commit. GITHUB_TOKEN pushes do not
+          # re-trigger pull_request workflows, so this cannot loop.
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "$IS_FORK" != "true" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "chore: sync codex bundle"
+            git push
+            echo "Committed regenerated Codex bundle to ${{ github.head_ref }}."
+          else
             echo "::error::plugins/n8n-skills/ is stale. Run: bash scripts/sync-codex-bundle.sh and commit the result."
             git diff --stat
             exit 1
