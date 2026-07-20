@@ -239,9 +239,9 @@ The system prompt is the load-bearing config of an agent. Severity ranges by how
 
 ### Readability
 
-- [ ] **Workflow over ~5 nodes with no sticky notes.** Reader has to read every node to find what they want. → [SKILL.md "Readability"](../SKILL.md)
-- [ ] **Workflow over ~10 nodes (n8n 2.28+) whose logical steps aren't grouped into node groups.** Collapsed groups make the canvas read as steps, not nodes. Skip on older instances, where node groups don't exist. → [SKILL.md "Readability"](../SKILL.md)
-- [ ] **Sticky title re-states what's visible** (`Set, If, Set` vs. `Validate input`). Title with the *purpose*. → [SKILL.md "Readability"](../SKILL.md)
+- [ ] **Workflow over ~10 nodes (n8n 2.28+) whose logical steps aren't grouped into node groups.** Grouping is the node group's job; collapsed groups make the canvas read as steps, not nodes. Skip on older instances, where node groups don't exist. → [SKILL.md "Readability"](../SKILL.md)
+- [ ] **Sticky note used to fake a group instead of `setNodeGroups`.** Stickies annotate (callouts, TODOs, warnings); they don't group. → [SKILL.md "Readability"](../SKILL.md)
+- [ ] **Sticky title re-states what's visible** (`Set, If, Set`). Title with the callout's point. → [SKILL.md "Readability"](../SKILL.md)
 - [ ] **Sticky colors used inconsistently.** One color per category (processing / errors / TODOs); otherwise color is noise. → [SKILL.md "Readability"](../SKILL.md)
 - [ ] **Workflow `description` is empty, one sentence, or doesn't capture the *why*.** Two sentences: what it does, why it exists. → [SKILL.md "Readability"](../SKILL.md)
 - [ ] **Code node without a one-line note** explaining its purpose. → [SKILL.md "Readability"](../SKILL.md)
