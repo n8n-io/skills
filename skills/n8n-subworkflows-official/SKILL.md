@@ -42,7 +42,7 @@ About to write a chunk of logic?
     └── Don't extract. Extra workflow boundary for nothing.
 ```
 
-When the only motivation is a cleaner canvas (not reuse, isolation, testability, or an agent tool), a **canvas node group** is the default tool for readability-only sectioning: faster (no sub-execution per call) and simpler (no input/output contract), with the logic staying inline. Group it where the section forms a valid group (connected, single entry/exit), otherwise use a sticky note. Extract to a sub-workflow only when you genuinely need reuse, isolation, independent testing, or an agent tool. See `n8n-workflow-lifecycle-official` Readability.
+When the only motivation is a cleaner canvas (not reuse, isolation, testability, or an agent tool), a **canvas node group** is the tool for readability-only sectioning: faster (no sub-execution per call) and simpler (no input/output contract), with the logic staying inline. Group it where the section forms a valid group (connected, single entry/exit); split a too-branchy section into smaller groups or leave it ungrouped (a sticky note annotates, it doesn't group). Extract to a sub-workflow only when you genuinely need reuse, isolation, independent testing, or an agent tool. See `n8n-workflow-lifecycle-official` Readability.
 
 ## Stateless vs. stateful sub-workflows
 
@@ -178,7 +178,7 @@ Each "logical step" is a sub-workflow call. The caller is a long but linear narr
 This is *not* the same as a 20-node workflow with 20 inline transformations. That's hard to read. The pattern above is fine because:
 
 - Each node has one purpose (call a specific sub-workflow).
-- Sticky notes and node groups mark sections (per `n8n-workflow-lifecycle-official` "Readability").
+- Node groups mark sections, sticky notes annotate them (per `n8n-workflow-lifecycle-official` "Readability").
 - Inspecting a section means opening the sub-workflow it calls. That's encapsulation.
 - Orchestration logic at the top level is visible without reading implementations.
 
