@@ -8,7 +8,7 @@
       "name": "n8n-skills",
       "source": {
         "source": "local",
-        "path": "./plugins/n8n-skills"
+        "path": "./"
       },
       "policy": {
         "installation": "AVAILABLE",

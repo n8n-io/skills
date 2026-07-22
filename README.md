@@ -51,6 +51,8 @@ codex plugin marketplace add n8n-io/skills
 codex plugin add n8n-skills@n8n-io
 ```
 
+> Requires **Codex ≥ 0.142.0** (root-plugin marketplace support). Works in both the Codex CLI and the Codex mode of the ChatGPT desktop app.
+
 Restart Codex. On first run, Codex prompts to review and trust the plugin's hooks, approve them so the SessionStart, PreToolUse, and PostToolUse reminders fire. Skills load automatically.
 
 ### Other platforms

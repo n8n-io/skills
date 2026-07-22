@@ -39,9 +39,9 @@ If a sentence does none of those, cut it.
 
 - `skills/<name>/SKILL.md`: the router. Cap **500 lines**. Frontmatter: `name`, `description`, optional `allowed-tools`.
 - `skills/<name>/references/*.md`: where depth lives. Loaded on demand. A 2,000-line reference is fine if it only loads when needed.
-- `skills/<name>/references/examples/*.json`: workflow JSON examples. Reference by relative path, never inline. Every example must validate on a current n8n version (CI runs validation on PRs).
+- `skills/<name>/references/examples/*.json`: workflow JSON examples. Reference by relative path, never inline. Every example must validate on a current n8n version.
 - `hooks/`: SessionStart and PreToolUse. Don't add new hooks without an issue discussion first.
-- `plugins/n8n-skills/`: **generated** Codex plugin bundle, a mirror of `hooks/` + `skills/`. Codex needs a self-contained plugin dir (it won't follow symlinks and rejects the repo root as a plugin), so the content is copied. Never hand-edit it. After changing `hooks/` or `skills/`, run `bash scripts/sync-codex-bundle.sh`; CI fails if the bundle is stale. The Codex marketplace entry is `.agents/plugins/marketplace.json`.
+- `.codex-plugin/plugin.json` + `.agents/plugins/marketplace.json`: the Codex plugin manifest and marketplace entry. Codex reads the repo root directly (`source.path: "./"`), consuming the same canonical `skills/` and `hooks/` as Claude Code (which reads root via `.claude-plugin/`). Requires **Codex ≥ 0.142.0**: PR #28771 added root-plugin marketplace support; earlier versions rejected the repo root and forced a mirrored copy. Codex still won't follow symlinks (openai/codex#24770), but with root support the mirror is unnecessary.
 
 SKILL.md layout:
 
@@ -83,7 +83,6 @@ Four flavors:
 - [ ] No tokens, real URLs, or real credentials in examples
 - [ ] Workflow JSON examples validate on a current n8n version
 - [ ] If touching hooks: regression-tested across `startup`, `resume`, `clear`, `compact`
-- [ ] If touching `hooks/` or `skills/`: ran `bash scripts/sync-codex-bundle.sh` so the Codex bundle is in sync
 - [ ] If touching the meta-skill MCP tool list: confirmed against a live n8n MCP connection
 
 ## License
