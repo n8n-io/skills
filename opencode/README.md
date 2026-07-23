@@ -5,8 +5,8 @@ This plugin bridges the n8n-skills bash hooks into [OpenCode](https://opencode.a
 ## What it does
 
 - **Injects the `using-n8n-skills-official` meta-skill into the system prompt** on every LLM call, so the agent always has the n8n skill protocol in context
-- **Survives compaction** — the meta-skill is injected into compaction context so it persists across context compression
-- **Appends hook reminders to n8n MCP tool results** — after each n8n MCP tool call, the corresponding bash hook script fires and its reminder is appended to the tool output
+- **Survives compaction**: the meta-skill is injected into compaction context so it persists across context compression
+- **Appends hook reminders to n8n MCP tool results**: after each n8n MCP tool call, the corresponding bash hook script fires and its reminder is appended to the tool output
 
 ## Prerequisites
 
@@ -77,7 +77,7 @@ The plugin matches tool names flexibly (`toolName.includes("n8n") && toolName.en
 
 ### Path resolution
 
-The plugin uses `import.meta.dir` (Bun) to resolve the repo root relative to its own file location. This means it works regardless of where the repo is cloned — no hardcoded paths.
+The plugin uses `import.meta.dir` (Bun) to resolve the repo root relative to its own file location. This means it works regardless of where the repo is cloned (no hardcoded paths).
 
 ### Silent failure
 
@@ -90,7 +90,7 @@ cd ~/.local/share/opencode/n8n-skills
 git pull origin main
 ```
 
-This updates skills, hooks, and the plugin together. No plugin updates needed when n8n adds new node warnings or antipattern checks — the bash hooks are the source of truth.
+This updates skills, hooks, and the plugin together. No plugin updates needed when n8n adds new node warnings or antipattern checks (the bash hooks are the source of truth).
 
 ## License
 

@@ -1,5 +1,5 @@
 // opencode/plugin.ts
-// OpenCode plugin for n8n-skills — bridges the existing bash hooks into
+// OpenCode plugin for n8n-skills: bridges the existing bash hooks into
 // OpenCode's plugin event system. See opencode/README.md for installation.
 //
 // Requires: OpenCode with @opencode-ai/plugin, bash, jq (for hook scripts).
@@ -58,7 +58,7 @@ const SYSTEM_MARKER = "[n8n-skills: using-n8n-skills-official]"
 export const N8nSkillsPlugin: Plugin = async ({ $ }) => {
   return {
     // 1. Inject meta-skill into system prompt on every LLM call
-    // This replaces Claude Code's SessionStart hook — the meta-skill is always
+    // This replaces Claude Code's SessionStart hook: the meta-skill is always
     // in context, so the agent never needs to manually load it
     "experimental.chat.system.transform": async (_input, output) => {
       const metaSkill = getMetaSkill()
@@ -84,7 +84,7 @@ export const N8nSkillsPlugin: Plugin = async ({ $ }) => {
     // and can adjust before its next action. This covers both PreToolUse
     // (reminders about to be relevant) and PostToolUse (analysis of what just ran)
     "tool.execute.after": async (input, output) => {
-      // PreToolUse reminders — fire after the tool returns so the agent sees
+      // PreToolUse reminders: fire after the tool returns so the agent sees
       // the reminder in the tool result and applies it on the next action
       for (const hook of PRE_TOOL_HOOKS) {
         if (!isN8nTool(input.tool, hook.match)) continue
@@ -105,12 +105,12 @@ export const N8nSkillsPlugin: Plugin = async ({ $ }) => {
             output.output += `\n\n--- n8n skill reminder ---\n${ctx}`
           }
         } catch {
-          // Silent failure — never block tool execution if a hook fails
+          // Silent failure: never block tool execution if a hook fails
         }
         break // Only one pre-tool hook matches per tool call
       }
 
-      // PostToolUse analysis — runs after validate_workflow to suggest
+      // PostToolUse analysis: runs after validate_workflow to suggest
       // which skills to load based on the node types detected in the code
       for (const hook of POST_TOOL_HOOKS) {
         if (!isN8nTool(input.tool, hook.match)) continue
