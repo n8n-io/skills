@@ -23,6 +23,7 @@ Pick your platform:
 
 - [Claude Code](#claude-code)
 - [Codex](#codex)
+- [OpenCode](#opencode)
 - [Other platforms](#other-platforms)
 
 ### Claude Code
@@ -54,6 +55,31 @@ codex plugin add n8n-skills@n8n-io
 > Requires **Codex ≥ 0.142.0** (root-plugin marketplace support). Works in both the Codex CLI and the Codex mode of the ChatGPT desktop app.
 
 Restart Codex. On first run, Codex prompts to review and trust the plugin's hooks, approve them so the SessionStart, PreToolUse, and PostToolUse reminders fire. Skills load automatically.
+
+### OpenCode
+
+Clone the repo and symlink the plugin:
+
+```bash
+git clone https://github.com/n8n-io/skills.git ~/.local/share/opencode/n8n-skills
+mkdir -p ~/.config/opencode/plugins/
+ln -s ~/.local/share/opencode/n8n-skills/opencode/plugin.ts \
+      ~/.config/opencode/plugins/n8n-skills-hooks.ts
+```
+
+Add the skills path to your `opencode.jsonc`:
+
+```jsonc
+{
+  "skills": {
+    "paths": [
+      "/home/youruser/.local/share/opencode/n8n-skills/skills"
+    ]
+  }
+}
+```
+
+Restart OpenCode. The plugin injects the `using-n8n-skills-official` meta-skill into the system prompt on every session and fires the bash hooks after n8n MCP tool calls. See [`opencode/README.md`](./opencode/README.md) for details.
 
 ### Other platforms
 

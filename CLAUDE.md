@@ -42,6 +42,7 @@ If a sentence does none of those, cut it.
 - `skills/<name>/references/examples/*.json`: workflow JSON examples. Reference by relative path, never inline. Every example must validate on a current n8n version.
 - `hooks/`: SessionStart and PreToolUse. Don't add new hooks without an issue discussion first.
 - `.codex-plugin/plugin.json` + `.agents/plugins/marketplace.json`: the Codex plugin manifest and marketplace entry. Codex reads the repo root directly (`source.path: "./"`), consuming the same canonical `skills/` and `hooks/` as Claude Code (which reads root via `.claude-plugin/`). Requires **Codex ≥ 0.142.0**: PR #28771 added root-plugin marketplace support; earlier versions rejected the repo root and forced a mirrored copy. Codex still won't follow symlinks (openai/codex#24770), but with root support the mirror is unnecessary.
+- `opencode/plugin.ts` + `opencode/README.md`: the OpenCode plugin. A TypeScript plugin that bridges the existing `hooks/` bash scripts into OpenCode's plugin event system (`experimental.chat.system.transform`, `experimental.session.compacting`, `tool.execute.after`). Uses relative path resolution via `import.meta.dir` so it works regardless of clone location. All hook logic stays in the canonical `hooks/` scripts — the plugin is glue code only.
 
 SKILL.md layout:
 
