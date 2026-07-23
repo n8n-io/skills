@@ -5,8 +5,9 @@
 // Requires: OpenCode with @opencode-ai/plugin, bash, jq (for hook scripts).
 
 import type { Plugin } from "@opencode-ai/plugin"
-import { readFileSync, existsSync } from "fs"
+import { readFileSync, existsSync, realpathSync } from "fs"
 import { join, dirname } from "path"
+import { spawnSync } from "child_process"
 
 // Type augmentation for Bun's import.meta.dir (not in standard Node.js types)
 declare global {
@@ -15,9 +16,20 @@ declare global {
   }
 }
 
+// Resolve the real path of this module in case it's loaded via symlink
+// (e.g. ~/.config/opencode/plugins/n8n-skills-hooks.ts -> ~/.../n8n-skills/opencode/plugin.ts)
+// Bun resolves import.meta.dir to the symlink target, but realpathSync ensures
+// correctness even if a future runtime changes that behaviour.
+const PLUGIN_DIR = (() => {
+  try {
+    return dirname(realpathSync(import.meta.dir + "/plugin.ts"))
+  } catch {
+    return import.meta.dir
+  }
+})()
+
 // Resolve repo root from this file's location (plugin is at <root>/opencode/plugin.ts)
-// Bun provides import.meta.dir as the directory of the current module
-const REPO_ROOT = join(dirname(import.meta.dir), "..")
+const REPO_ROOT = join(PLUGIN_DIR, "..")
 const HOOKS_DIR = join(REPO_ROOT, "hooks")
 const META_SKILL_PATH = join(REPO_ROOT, "skills", "using-n8n-skills-official", "SKILL.md")
 
@@ -55,7 +67,37 @@ const POST_TOOL_HOOKS: Array<{ match: string; script: string }> = [
 // Marker string to prevent duplicate injection into system prompt
 const SYSTEM_MARKER = "[n8n-skills: using-n8n-skills-official]"
 
-const N8nSkillsPlugin: Plugin = async ({ $ }) => {
+// Run a bash hook script synchronously with JSON stdin and return parsed output
+// Uses spawnSync instead of BunShell ($) for reliability inside OpenCode's plugin context
+function runHook(scriptPath: string, hookInput: string): { hookSpecificOutput?: { additionalContext?: string } } | null {
+  try {
+    const result = spawnSync("bash", [scriptPath], {
+      input: hookInput,
+      encoding: "utf-8",
+      timeout: 10000,
+    })
+    if (result.status !== 0 || !result.stdout) return null
+    return JSON.parse(result.stdout)
+  } catch {
+    return null
+  }
+}
+
+// Append text to the tool result output, handling both output shapes:
+// - Built-in tools: output.output is a string (mutate with +=)
+// - MCP tools: output.content is an array of {type:"text", text:string}
+//   (push a new content entry)
+// Without this, output.output += "..." silently fails for MCP tools
+// because output.output is undefined.
+function appendToOutput(output: any, text: string): void {
+  if (typeof output.output === "string") {
+    output.output += text
+  } else if (Array.isArray(output.content)) {
+    output.content.push({ type: "text", text })
+  }
+}
+
+const N8nSkillsPlugin: Plugin = async (input) => {
   return {
     // 1. Inject meta-skill into system prompt on every LLM call
     // This replaces Claude Code's SessionStart hook: the meta-skill is always
@@ -79,33 +121,23 @@ const N8nSkillsPlugin: Plugin = async ({ $ }) => {
     },
 
     // 3. After n8n MCP tools return, append hook reminders to tool output
-    // OpenCode's tool.execute.after exposes output.output (the tool result string)
-    // We append the hook's additionalContext to the result so the agent sees it
-    // and can adjust before its next action. This covers both PreToolUse
-    // (reminders about to be relevant) and PostToolUse (analysis of what just ran)
+    // OpenCode passes different output shapes to tool.execute.after:
+    // built-in tools get { output: string }, MCP tools get { content: [{type, text}] }.
+    // appendToOutput() handles both. This covers both PreToolUse
+    // (reminders about to be relevant) and PostToolUse (analysis of what just ran).
     "tool.execute.after": async (input, output) => {
       // PreToolUse reminders: fire after the tool returns so the agent sees
       // the reminder in the tool result and applies it on the next action
       for (const hook of PRE_TOOL_HOOKS) {
         if (!isN8nTool(input.tool, hook.match)) continue
-        try {
-          // Construct a JSON payload compatible with the bash hooks' stdin format
-          // The hooks expect Claude Code's hook input shape: { session_id, tool_input }
-          const hookInput = JSON.stringify({
-            session_id: input.sessionID,
-            tool_input: input.args,
-          })
-          const scriptPath = join(HOOKS_DIR, hook.script)
-          // Pipe the JSON to the bash script and capture stdout
-          const result = await $`echo ${hookInput} | bash ${scriptPath}`.text()
-          // Parse the hook's JSON output to extract additionalContext
-          const parsed = JSON.parse(result)
-          const ctx = parsed.hookSpecificOutput?.additionalContext
-          if (ctx) {
-            output.output += `\n\n--- n8n skill reminder ---\n${ctx}`
-          }
-        } catch {
-          // Silent failure: never block tool execution if a hook fails
+        const hookInput = JSON.stringify({
+          session_id: input.sessionID,
+          tool_input: input.args,
+        })
+        const scriptPath = join(HOOKS_DIR, hook.script)
+        const parsed = runHook(scriptPath, hookInput)
+        if (parsed?.hookSpecificOutput?.additionalContext) {
+          appendToOutput(output, `\n\n--- n8n skill reminder ---\n${parsed.hookSpecificOutput.additionalContext}`)
         }
         break // Only one pre-tool hook matches per tool call
       }
@@ -114,20 +146,14 @@ const N8nSkillsPlugin: Plugin = async ({ $ }) => {
       // which skills to load based on the node types detected in the code
       for (const hook of POST_TOOL_HOOKS) {
         if (!isN8nTool(input.tool, hook.match)) continue
-        try {
-          const hookInput = JSON.stringify({
-            session_id: input.sessionID,
-            tool_input: input.args,
-          })
-          const scriptPath = join(HOOKS_DIR, hook.script)
-          const result = await $`echo ${hookInput} | bash ${scriptPath}`.text()
-          const parsed = JSON.parse(result)
-          const ctx = parsed.hookSpecificOutput?.additionalContext
-          if (ctx) {
-            output.output += `\n\n--- n8n post-validation analysis ---\n${ctx}`
-          }
-        } catch {
-          // Silent failure
+        const hookInput = JSON.stringify({
+          session_id: input.sessionID,
+          tool_input: input.args,
+        })
+        const scriptPath = join(HOOKS_DIR, hook.script)
+        const parsed = runHook(scriptPath, hookInput)
+        if (parsed?.hookSpecificOutput?.additionalContext) {
+          appendToOutput(output, `\n\n--- n8n post-validation analysis ---\n${parsed.hookSpecificOutput.additionalContext}`)
         }
         break
       }

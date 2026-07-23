@@ -79,9 +79,13 @@ The plugin matches tool names flexibly (`toolName.includes("n8n") && toolName.en
 
 The plugin uses `import.meta.dir` (Bun) to resolve the repo root relative to its own file location. This means it works regardless of where the repo is cloned (no hardcoded paths).
 
+### MCP tool output shapes
+
+OpenCode passes different output object shapes to `tool.execute.after` depending on the tool type: built-in tools get `{ output: string }`, but MCP tools get `{ content: [{type, text}] }` (the raw MCP `CallResult`). The plugin's `appendToOutput()` helper detects which shape is present and appends text accordingly. Without this, `output.output += "..."` silently fails for MCP tools because `output.output` is `undefined`.
+
 ### Silent failure
 
-All hook calls are wrapped in try/catch. If a hook script fails (missing `jq`, file permissions, etc.), the tool result passes through unmodified. Hook errors never block tool execution.
+All hook calls use `spawnSync` with a 10-second timeout and are wrapped in try/catch. If a hook script fails (missing `jq`, file permissions, timeout, etc.), the tool result passes through unmodified. Hook errors never block tool execution.
 
 ## Updating
 
