@@ -55,7 +55,7 @@ const POST_TOOL_HOOKS: Array<{ match: string; script: string }> = [
 // Marker string to prevent duplicate injection into system prompt
 const SYSTEM_MARKER = "[n8n-skills: using-n8n-skills-official]"
 
-export const N8nSkillsPlugin: Plugin = async ({ $ }) => {
+const N8nSkillsPlugin: Plugin = async ({ $ }) => {
   return {
     // 1. Inject meta-skill into system prompt on every LLM call
     // This replaces Claude Code's SessionStart hook: the meta-skill is always
@@ -134,3 +134,5 @@ export const N8nSkillsPlugin: Plugin = async ({ $ }) => {
     },
   }
 }
+
+export default N8nSkillsPlugin
