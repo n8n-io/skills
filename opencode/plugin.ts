@@ -5,7 +5,7 @@
 // Requires: OpenCode with @opencode-ai/plugin, bash, jq (for hook scripts).
 
 import type { Plugin } from "@opencode-ai/plugin"
-import { readFileSync, existsSync, realpathSync } from "fs"
+import { readFileSync, existsSync, realpathSync, statSync } from "fs"
 import { join, dirname } from "path"
 import { spawnSync } from "child_process"
 
@@ -33,13 +33,25 @@ const REPO_ROOT = join(PLUGIN_DIR, "..")
 const HOOKS_DIR = join(REPO_ROOT, "hooks")
 const META_SKILL_PATH = join(REPO_ROOT, "skills", "using-n8n-skills-official", "SKILL.md")
 
-// Cache the meta-skill content (read once on first use, reuse thereafter)
+// Cache the meta-skill content with mtime-based invalidation.
+// On git pull, SKILL.md changes on disk; checking mtime ensures the cache
+// is invalidated without requiring an OpenCode restart.
 let metaSkillCache: string | null = null
+let metaSkillMtime = 0
 function getMetaSkill(): string | null {
-  if (metaSkillCache === null && existsSync(META_SKILL_PATH)) {
-    metaSkillCache = readFileSync(META_SKILL_PATH, "utf-8")
+  try {
+    if (!existsSync(META_SKILL_PATH)) return null
+    const mtime = statSync(META_SKILL_PATH).mtimeMs
+    if (metaSkillCache === null || mtime !== metaSkillMtime) {
+      metaSkillCache = readFileSync(META_SKILL_PATH, "utf-8")
+      metaSkillMtime = mtime
+    }
+    return metaSkillCache
+  } catch {
+    // Transient read failure (file locked, permissions, etc.): degrade
+    // gracefully without skill injection rather than rejecting the event
+    return null
   }
-  return metaSkillCache
 }
 
 // Match n8n MCP tool names flexibly (server name is user-configurable in OpenCode)
@@ -126,36 +138,40 @@ const N8nSkillsPlugin: Plugin = async (input) => {
     // appendToOutput() handles both. This covers both PreToolUse
     // (reminders about to be relevant) and PostToolUse (analysis of what just ran).
     "tool.execute.after": async (input, output) => {
-      // PreToolUse reminders: fire after the tool returns so the agent sees
-      // the reminder in the tool result and applies it on the next action
-      for (const hook of PRE_TOOL_HOOKS) {
-        if (!isN8nTool(input.tool, hook.match)) continue
-        const hookInput = JSON.stringify({
-          session_id: input.sessionID,
-          tool_input: input.args,
-        })
-        const scriptPath = join(HOOKS_DIR, hook.script)
-        const parsed = runHook(scriptPath, hookInput)
-        if (parsed?.hookSpecificOutput?.additionalContext) {
-          appendToOutput(output, `\n\n--- n8n skill reminder ---\n${parsed.hookSpecificOutput.additionalContext}`)
+      try {
+        // PreToolUse reminders: fire after the tool returns so the agent sees
+        // the reminder in the tool result and applies it on the next action
+        for (const hook of PRE_TOOL_HOOKS) {
+          if (!isN8nTool(input.tool, hook.match)) continue
+          const hookInput = JSON.stringify({
+            session_id: input.sessionID,
+            tool_input: input.args,
+          })
+          const scriptPath = join(HOOKS_DIR, hook.script)
+          const parsed = runHook(scriptPath, hookInput)
+          if (parsed?.hookSpecificOutput?.additionalContext) {
+            appendToOutput(output, `\n\n--- n8n skill reminder ---\n${parsed.hookSpecificOutput.additionalContext}`)
+          }
+          break // Only one pre-tool hook matches per tool call
         }
-        break // Only one pre-tool hook matches per tool call
-      }
 
-      // PostToolUse analysis: runs after validate_workflow to suggest
-      // which skills to load based on the node types detected in the code
-      for (const hook of POST_TOOL_HOOKS) {
-        if (!isN8nTool(input.tool, hook.match)) continue
-        const hookInput = JSON.stringify({
-          session_id: input.sessionID,
-          tool_input: input.args,
-        })
-        const scriptPath = join(HOOKS_DIR, hook.script)
-        const parsed = runHook(scriptPath, hookInput)
-        if (parsed?.hookSpecificOutput?.additionalContext) {
-          appendToOutput(output, `\n\n--- n8n post-validation analysis ---\n${parsed.hookSpecificOutput.additionalContext}`)
+        // PostToolUse analysis: runs after validate_workflow to suggest
+        // which skills to load based on the node types detected in the code
+        for (const hook of POST_TOOL_HOOKS) {
+          if (!isN8nTool(input.tool, hook.match)) continue
+          const hookInput = JSON.stringify({
+            session_id: input.sessionID,
+            tool_input: input.args,
+          })
+          const scriptPath = join(HOOKS_DIR, hook.script)
+          const parsed = runHook(scriptPath, hookInput)
+          if (parsed?.hookSpecificOutput?.additionalContext) {
+            appendToOutput(output, `\n\n--- n8n post-validation analysis ---\n${parsed.hookSpecificOutput.additionalContext}`)
+          }
+          break
         }
-        break
+      } catch {
+        // Silent failure: never block tool execution if serialization or hooks fail
       }
     },
   }
