@@ -6,7 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/n8n-hooks.mjs\" session-start",
+            "timeout": 10
           }
         ]
       }
@@ -17,7 +18,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/validate-workflow.sh"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/n8n-hooks.mjs\" pre-validate-workflow",
+            "timeout": 10
           }
         ]
       },
@@ -26,7 +28,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/create-workflow.sh"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/n8n-hooks.mjs\" pre-create-workflow",
+            "timeout": 10
           }
         ]
       },
@@ -35,7 +38,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/update-workflow.sh"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/n8n-hooks.mjs\" pre-update-workflow",
+            "timeout": 10
           }
         ]
       },
@@ -44,7 +48,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/get-node.sh"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/n8n-hooks.mjs\" pre-get-node-types",
+            "timeout": 10
           }
         ]
       },
@@ -53,7 +58,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/execute-workflow.sh"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/n8n-hooks.mjs\" pre-execute-workflow",
+            "timeout": 10
           }
         ]
       },
@@ -62,7 +68,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/test-workflow.sh"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/n8n-hooks.mjs\" pre-test-workflow",
+            "timeout": 10
           }
         ]
       }
@@ -73,7 +80,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-use/validate-workflow.sh"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/n8n-hooks.mjs\" post-validate-workflow",
+            "timeout": 10
           }
         ]
       }
