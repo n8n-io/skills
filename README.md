@@ -25,6 +25,8 @@ Pick your platform:
 - [Claude Code (CLI)](#claude-code-cli)
 - [Claude Code (Desktop app)](#claude-code-desktop-app)
 - [Codex](#codex)
+- [OpenCode (CLI)](#opencode-cli)
+- [OpenCode (Desktop app)](#opencode-desktop-app)
 - [Other platforms](#other-platforms)
 
 ### Claude Code (CLI)
@@ -59,6 +61,33 @@ In a terminal:
    ```
    - No terminal (desktop app only)? Add it in the GUI: **Settings → MCP servers → Add server → Streamable HTTP**, paste the URL, save, then **Restart**.
 4. **Authorize the MCP.** Codex signs in via OAuth on first use, or click **Authenticate** in the MCP servers list.
+
+### OpenCode (CLI)
+
+Add one line to your `opencode.jsonc` (global `~/.config/opencode/`, or a project `.opencode/`) and restart:
+
+```jsonc
+{
+  "plugin": ["n8n-skills@git+https://github.com/n8n-io/skills.git"]
+}
+```
+
+OpenCode fetches and installs the plugin, which registers the n8n skills and fires the bash hooks after n8n MCP tool calls. No clone, symlink, or `skills.paths`. Pin a version with `...skills.git#v1.2.0`.
+
+### OpenCode (Desktop app)
+
+The desktop app loads plugins from `~/.config/opencode/plugins/`. Get the repo (clone, or download and unzip [the ZIP](https://github.com/n8n-io/skills/archive/refs/heads/main.zip)), then symlink the plugin file into that folder:
+
+```bash
+git clone https://github.com/n8n-io/skills.git ~/.local/share/opencode/n8n-skills
+mkdir -p ~/.config/opencode/plugins/
+ln -s ~/.local/share/opencode/n8n-skills/opencode/plugin.ts \
+      ~/.config/opencode/plugins/n8n-skills-hooks.ts
+```
+
+Fully quit and reopen the app. The plugin self-registers its skills, so no `skills.paths` is needed. Update later with `git pull` in the clone (or re-download the ZIP).
+
+See [`opencode/README.md`](./opencode/README.md) for prerequisites and the experimental-API caveat.
 
 ### Other platforms
 

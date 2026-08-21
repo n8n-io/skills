@@ -1,0 +1,19 @@
+{
+  "name": "n8n-skills",
+  "version": "1.2.0",
+  "description": "n8n skills and hooks for coding agents. This package is the OpenCode plugin entry point; Claude Code and Codex read their own manifests from the repo root.",
+  "type": "module",
+  "main": "opencode/plugin.ts",
+  "files": [
+    "opencode",
+    "skills",
+    "hooks"
+  ],
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "n8n",
+    "skills"
+  ],
+  "license": "Apache-2.0"
+}
