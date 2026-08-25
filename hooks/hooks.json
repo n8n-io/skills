@@ -6,7 +6,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.ps1\" session-start",
+            "timeout": 10
           }
         ]
       }
@@ -17,7 +19,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/validate-workflow.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/validate-workflow.sh",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.ps1\" pre-validate-workflow",
+            "timeout": 10
           }
         ]
       },
@@ -26,7 +30,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/create-workflow.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/create-workflow.sh",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.ps1\" pre-create-workflow",
+            "timeout": 10
           }
         ]
       },
@@ -35,7 +41,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/update-workflow.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/update-workflow.sh",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.ps1\" pre-update-workflow",
+            "timeout": 10
           }
         ]
       },
@@ -44,7 +52,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/get-node.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/get-node.sh",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.ps1\" pre-get-node-types",
+            "timeout": 10
           }
         ]
       },
@@ -53,7 +63,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/execute-workflow.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/execute-workflow.sh",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.ps1\" pre-execute-workflow",
+            "timeout": 10
           }
         ]
       },
@@ -62,7 +74,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/test-workflow.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-use/test-workflow.sh",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.ps1\" pre-test-workflow",
+            "timeout": 10
           }
         ]
       }
@@ -73,7 +87,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-use/validate-workflow.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-use/validate-workflow.sh",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.ps1\" post-validate-workflow",
+            "timeout": 10
           }
         ]
       }
