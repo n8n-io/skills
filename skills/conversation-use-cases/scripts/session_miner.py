@@ -3,7 +3,8 @@
 
 Reads every Claude Code session under a projects directory (default
 ~/.claude/projects), plus Codex CLI threads under ~/.codex Cursor agent chats from its
-state.vscdb, and OpenCode sessions from opencode.db, and emits counts only: no message text, no file paths,
+state.vscdb, OpenCode sessions from opencode.db, and Pi, Droid, Gemini CLI, Amp,
+Copilot CLI, Goose and Hermes stores when present, and emits counts only: no message text, no file paths,
 no command bodies ever reach the output. Standard library only.
 
 Layout assumed (as written by Claude Code):
@@ -914,20 +915,21 @@ KNOWN_STORES = [
     ("claude-code", "~/.claude/projects", "parsed"),
     ("codex", "~/.codex/sessions", "parsed"),
     ("codex (archived)", "~/.codex/archived_sessions", "parsed"),
-    ("opencode", "~/.local/share/opencode", "parsed (opencode.db)"),
-    ("pi", "~/.pi/agent/sessions", "detected only"),
-    ("goose", "~/.local/share/goose/sessions", "detected only"),
-    ("gemini-cli", "~/.gemini/tmp", "detected only"),
-    ("amp", "~/.local/share/amp", "detected only"),
-    ("amp (alt)", "~/.amp", "detected only"),
-    ("cursor", "~/Library/Application Support/Cursor/User/globalStorage", "parsed"),
+    ("cursor", "~/Library/Application Support/Cursor/User/globalStorage", "parsed (state.vscdb)"),
+    ("opencode", "~/.local/share/opencode", "parsed (opencode.db); legacy storage/ json not parsed"),
+    ("pi", "~/.pi/agent/sessions", "parsed, unvalidated on real data"),
+    ("droid", "~/.factory/sessions", "parsed, unvalidated on real data"),
+    ("gemini-cli", "~/.gemini/tmp", "parsed, unvalidated on real data"),
+    ("amp", "~/.local/share/amp/threads", "parsed, unvalidated; no per-message timestamps"),
+    ("copilot-cli", "~/.copilot/session-state", "parsed, unvalidated; community-documented events"),
+    ("goose", "~/.local/share/goose/sessions", "parsed (sessions.db), unvalidated on real data"),
+    ("hermes", "~/.hermes", "parsed (state.db), unvalidated on real data"),
     ("cline", "~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev", "detected only"),
-    ("copilot-cli", "~/.copilot", "detected only; holds hooks and skills, no sessions"),
-    ("aider", "~/.aider", "detected only; chat history is per repo (.aider.chat.history.md), not parsed"),
-    ("kiro", "~/.kiro", "detected only"),
-    ("hermes", "~/.hermes", "detected only"),
-    ("orca", "~/Library/Application Support/Orca", "metadata only; its sessions are Claude Code or Codex files"),
-    ("conductor", "~/conductor", "workspaces only; its sessions are Claude Code files"),
+    ("kiro-cli", "~/Library/Application Support/kiro-cli", "detected only"),
+    ("kiro-cli (jsonl)", "~/.kiro/sessions", "detected only"),
+    ("aider", "~/.aider", "detected only; chat history is per repo (.aider.chat.history.md)"),
+    ("conductor", "~/Library/Application Support/com.conductor.app", "detected only; its sessions are Claude Code files already parsed"),
+    ("orca", "~/Library/Application Support/Orca", "metadata only; its sessions are Claude Code, Codex or Cursor files"),
     ("chatgpt-desktop", "~/Library/Application Support/com.openai.chat", "encrypted at rest, not readable"),
     ("claude-desktop", "~/Library/Application Support/Claude", "web app cache, not readable"),
 ]
@@ -1145,6 +1147,341 @@ def scan_opencode(since_days, tz):
             shutil.rmtree(tmp, ignore_errors=True)
     return out
 
+def blocks_text(content):
+    """Text of an Anthropic-style content list, or the string itself."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") in ("text", "input_text", "output_text")]
+        return "\n".join(parts) if parts else None
+    return None
+
+
+def blocks_tools(content):
+    if not isinstance(content, list):
+        return []
+    names = []
+    for b in content:
+        if not isinstance(b, dict):
+            continue
+        if b.get("type") in ("tool_use", "toolCall", "tool_call", "toolRequest"):
+            names.append(b.get("name") or (b.get("toolCall") or {}).get("name") or ((b.get("toolRequest") or {}).get("value") or {}).get("name") or (b.get("function") or {}).get("name") or "(unnamed)")
+    return names
+
+
+def iter_jsonl(path):
+    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            try:
+                ev = json.loads(line)
+            except (ValueError, RecursionError):
+                continue
+            if isinstance(ev, dict):
+                yield ev
+
+
+def files_under(root, suffixes, since_days):
+    cutoff = time.time() - since_days * 86400 if since_days else None
+    for dirpath, _dirs, files in os.walk(root):
+        for f in sorted(files):
+            if f.endswith(suffixes):
+                path = os.path.join(dirpath, f)
+                if cutoff and os.path.getmtime(path) < cutoff:
+                    continue
+                yield path
+
+
+def scan_anthropic_jsonl(root, harness, since_days, tz, header_types=("session", "session_start")):
+    """Pi (~/.pi/agent/sessions) and Factory Droid (~/.factory/sessions) both write one JSONL per
+    session with a header line and Anthropic-shaped message lines: {type:"message", timestamp,
+    message:{role, content}}. Assistant tool calls are content blocks (tool_use or toolCall).
+    Written from the documented formats; not validated on real data here."""
+    out = []
+    if not os.path.isdir(root):
+        return out
+    for path in files_under(root, (".jsonl",), since_days):
+        sess = None
+        for ev in iter_jsonl(path):
+            t = ev.get("type")
+            ts = parse_ts(ev.get("timestamp"))
+            if sess is None:
+                cwd = str(ev.get("cwd") or "") if t in header_types else ""
+                sess = Session(str(ev.get("id") or ev.get("sessionId") or os.path.basename(path)[:-6]), codex_project_label(cwd) if cwd else "(unknown)")
+                sess.harness = harness
+                sess.touch(ts)
+                if t in header_types:
+                    continue
+            if t != "message":
+                continue
+            msg = ev.get("message") if isinstance(ev.get("message"), dict) else {}
+            role = msg.get("role")
+            if role == "user":
+                text = blocks_text(msg.get("content"))
+                if text and text.strip() and not text.lstrip().startswith(SKIP_PREFIXES):
+                    sess.touch(ts)
+                    sess.human_turn(text, ts, tz)
+            elif role == "assistant":
+                tools = blocks_tools(msg.get("content"))
+                for name in tools:
+                    sess.tool(name, ts)
+                if not tools:
+                    sess.assistant_turn(ts, ev.get("id") or str(ts), False)
+                if msg.get("model"):
+                    sess.models[str(msg["model"])[:40]] += 1
+        if sess is not None and sess.start:
+            out.append(sess)
+    return out
+
+
+def scan_gemini(root, since_days, tz):
+    """Gemini CLI: ~/.gemini/tmp/<project_hash>/chats/session-*.jsonl (line 1 metadata, then records
+    with type user|gemini, timestamp, content, toolCalls[]); older builds wrote one JSON object with a
+    messages list. Not validated on real data here."""
+    out = []
+    if not os.path.isdir(root):
+        return out
+    for path in files_under(root, (".jsonl", ".json"), since_days):
+        if "/chats/" not in path:
+            continue
+        records, meta = [], {}
+        if path.endswith(".jsonl"):
+            for ev in iter_jsonl(path):
+                if not meta and ev.get("sessionId"):
+                    meta = ev
+                    continue
+                records.append(ev)
+        else:
+            try:
+                obj = json.load(open(path, encoding="utf-8", errors="replace"))
+            except Exception:
+                continue
+            meta = obj if isinstance(obj, dict) else {}
+            records = obj.get("messages", []) if isinstance(obj, dict) else []
+        if not records:
+            continue
+        dirs = meta.get("directories") or []
+        sess = Session(str(meta.get("sessionId") or os.path.basename(path).rsplit(".", 1)[0]), codex_project_label(str(dirs[0])) if dirs else "(unknown)")
+        sess.harness = "gemini-cli"
+        sess.touch(parse_ts(meta.get("startTime")))
+        for r in records:
+            if not isinstance(r, dict):
+                continue
+            ts = parse_ts(r.get("timestamp"))
+            if r.get("type") == "user":
+                text = blocks_text(r.get("content")) if not isinstance(r.get("content"), str) else r.get("content")
+                if text and text.strip():
+                    sess.touch(ts)
+                    sess.human_turn(text, ts, tz)
+            elif r.get("type") == "gemini":
+                calls = r.get("toolCalls") or []
+                for c in calls:
+                    if isinstance(c, dict):
+                        sess.tool(c.get("name"), ts)
+                if not calls:
+                    sess.assistant_turn(ts, r.get("id") or str(ts), False)
+                if r.get("model"):
+                    sess.models[str(r["model"])[:40]] += 1
+        if sess.start:
+            out.append(sess)
+    return out
+
+
+def scan_amp(root, since_days, tz):
+    """Amp: ~/.local/share/amp/threads/T-*.json, one JSON per thread with created (ms) and
+    messages[{role, content[]}]. Messages carry no timestamps, so every turn takes the thread
+    time; gaps and hours are not meaningful for Amp. Third-party documented format."""
+    out = []
+    if not os.path.isdir(root):
+        return out
+    for path in files_under(root, (".json",), since_days):
+        try:
+            th = json.load(open(path, encoding="utf-8", errors="replace"))
+        except Exception:
+            continue
+        if not isinstance(th, dict) or not isinstance(th.get("messages"), list):
+            continue
+        ts = ms_ts(th.get("created"))
+        sess = Session(str(th.get("id") or os.path.basename(path)[:-5]), "(unknown)")
+        sess.harness = "amp"
+        sess.touch(ts)
+        for i, m in enumerate(th["messages"]):
+            if not isinstance(m, dict):
+                continue
+            if m.get("role") == "user":
+                text = blocks_text(m.get("content"))
+                if text and text.strip():
+                    sess.human_turn(text, ts, tz)
+            elif m.get("role") == "assistant":
+                tools = blocks_tools(m.get("content"))
+                for name in tools:
+                    sess.tool(name, ts)
+                if not tools:
+                    sess.assistant_turn(ts, str(i), False)
+        if sess.start:
+            out.append(sess)
+    return out
+
+
+def scan_copilot(root, since_days, tz):
+    """GitHub Copilot CLI: ~/.copilot/session-state/<id>/events.jsonl with {type, timestamp, data};
+    user.message, assistant.message, tool.execution_start. Event field names are community
+    documented, not an official API."""
+    out = []
+    if not os.path.isdir(root):
+        return out
+    for path in files_under(root, ("events.jsonl",), since_days):
+        sid = os.path.basename(os.path.dirname(path))
+        cwd = ""
+        ws = os.path.join(os.path.dirname(path), "workspace.yaml")
+        if os.path.isfile(ws):
+            for line in open(ws, encoding="utf-8", errors="replace"):
+                if line.startswith("cwd:"):
+                    cwd = line.split(":", 1)[1].strip().strip('"\'')
+                    break
+        sess = Session(sid, codex_project_label(cwd) if cwd else "(unknown)")
+        sess.harness = "copilot-cli"
+        for ev in iter_jsonl(path):
+            t = ev.get("type")
+            ts = parse_ts(ev.get("timestamp"))
+            data = ev.get("data") if isinstance(ev.get("data"), dict) else {}
+            if t == "user.message":
+                text = data.get("content") or ""
+                if text.strip():
+                    sess.touch(ts)
+                    sess.human_turn(text, ts, tz)
+            elif t == "assistant.message":
+                sess.assistant_turn(ts, ev.get("id") or str(ts), bool(data.get("toolRequests")))
+            elif t == "tool.execution_start":
+                sess.tool(data.get("toolName") or data.get("name"), ts)
+        if sess.start:
+            out.append(sess)
+    return out
+
+
+def scan_sqlite_messages(db_path, harness, since_days, tz, sql_sessions, sql_messages, tools_from):
+    """Goose (~/.local/share/goose/sessions/sessions.db) and Hermes (~/.hermes/state.db) keep a
+    sessions table and a messages table with role and timestamp columns. The db is copied with its
+    WAL to a temp dir and opened read-only. Not validated on real data here."""
+    out = []
+    if not os.path.isfile(db_path):
+        return out
+    tmp = tempfile.mkdtemp(prefix="miner-")
+    try:
+        for suf in ("", "-wal", "-shm"):
+            if os.path.exists(db_path + suf):
+                shutil.copy2(db_path + suf, os.path.join(tmp, os.path.basename(db_path) + suf))
+        con = sqlite3.connect(f"file:{os.path.join(tmp, os.path.basename(db_path))}?mode=ro", uri=True)
+        con.row_factory = sqlite3.Row
+        cutoff = time.time() - since_days * 86400 if since_days else None
+        for srow in con.execute(sql_sessions):
+            start = parse_ts(srow["started"]) if isinstance(srow["started"], str) else ms_ts(srow["started"] * (1000 if srow["started"] and srow["started"] < 1e11 else 1))
+            if cutoff and start and start.timestamp() < cutoff:
+                continue
+            sess = Session(str(srow["id"]), codex_project_label(str(srow["cwd"] or "")))
+            sess.harness = harness
+            if srow["model"]:
+                sess.models[str(srow["model"])[:40]] += 1
+            sess.touch(start)
+            for m in con.execute(sql_messages, (srow["id"],)):
+                raw = m["ts"]
+                ts = parse_ts(raw) if isinstance(raw, str) else ms_ts(raw * (1000 if raw and raw < 1e11 else 1))
+                role = m["role"]
+                if role == "user":
+                    text = m["content"] or ""
+                    try:
+                        text = blocks_text(json.loads(text)) or text if text.lstrip().startswith("[") else text
+                    except Exception:
+                        pass
+                    if isinstance(text, str) and text.strip():
+                        sess.touch(ts)
+                        sess.human_turn(text, ts, tz)
+                elif role == "assistant":
+                    names = tools_from(m)
+                    for n in names:
+                        sess.tool(n, ts)
+                    if not names:
+                        sess.assistant_turn(ts, str(m["mid"]), False)
+            if sess.start:
+                out.append(sess)
+        con.close()
+    except sqlite3.Error as e:
+        print(f"[{harness}] could not read {db_path}: {e}", file=sys.stderr)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return out
+
+
+def goose_tools(m):
+    try:
+        return blocks_tools(json.loads(m["content"]))
+    except Exception:
+        return []
+
+
+def hermes_tools(m):
+    try:
+        calls = json.loads(m["extra"]) if m["extra"] else []
+    except Exception:
+        return []
+    return [((c.get("function") or {}).get("name") or c.get("name") or "(unnamed)") for c in calls if isinstance(c, dict)]
+
+
+def scan_other_harnesses(since_days, tz):
+    found = []
+    jobs = [
+        ("pi", lambda: scan_anthropic_jsonl(os.path.expanduser(os.environ.get("PI_CODING_AGENT_DIR", "~/.pi/agent")) + "/sessions" if not os.environ.get("PI_CODING_AGENT_DIR") else os.path.join(os.environ["PI_CODING_AGENT_DIR"], "sessions"), "pi", since_days, tz)),
+        ("droid", lambda: scan_anthropic_jsonl(os.path.expanduser("~/.factory/sessions"), "droid", since_days, tz)),
+        ("gemini-cli", lambda: scan_gemini(os.path.expanduser("~/.gemini/tmp"), since_days, tz)),
+        ("amp", lambda: scan_amp(os.path.expanduser("~/.local/share/amp/threads"), since_days, tz)),
+        ("copilot-cli", lambda: scan_copilot(os.path.expanduser(os.environ.get("COPILOT_HOME", "~/.copilot")) + "/session-state", since_days, tz)),
+        ("goose", lambda: scan_sqlite_messages(os.path.expanduser("~/.local/share/goose/sessions/sessions.db"), "goose", since_days, tz,
+            "select id, working_dir as cwd, created_at as started, provider_name as model from sessions",
+            "select id as mid, role, content_json as content, created_timestamp as ts, NULL as extra from messages where session_id=? order by created_timestamp", goose_tools)),
+        ("hermes", lambda: scan_sqlite_messages(os.path.expanduser(os.environ.get("HERMES_HOME", "~/.hermes")) + "/state.db", "hermes", since_days, tz,
+            "select id, cwd, started_at as started, model from sessions",
+            "select id as mid, role, content, timestamp as ts, tool_calls as extra from messages where session_id=? order by timestamp", hermes_tools)),
+    ]
+    for name, fn in jobs:
+        try:
+            got = fn()
+        except Exception as e:
+            print(f"[{name}] skipped: {e}", file=sys.stderr)
+            got = []
+        if got:
+            print(f"[{name}] {len(got)} sessions", file=sys.stderr)
+        found.extend(got)
+    return found
+
+
+def self_test_adapters():
+    tmp = tempfile.mkdtemp(prefix="miner-selftest-")
+    tz = ZoneInfo("UTC")
+    try:
+        pi_dir = os.path.join(tmp, "pi", "-tmp-proj")
+        os.makedirs(pi_dir)
+        with open(os.path.join(pi_dir, "s1.jsonl"), "w") as fh:
+            fh.write(json.dumps({"type": "session", "id": "pi1", "timestamp": "2026-01-01T10:00:00Z", "cwd": "/tmp/proj"}) + "\n")
+            fh.write(json.dumps({"type": "message", "id": "m1", "timestamp": "2026-01-01T10:01:00Z", "message": {"role": "user", "content": "What is the progress? Please be concise."}}) + "\n")
+            fh.write(json.dumps({"type": "message", "id": "m2", "timestamp": "2026-01-01T10:02:00Z", "message": {"role": "assistant", "content": [{"type": "toolCall", "name": "bash"}]}}) + "\n")
+        got = scan_anthropic_jsonl(os.path.join(tmp, "pi"), "pi", None, tz)
+        assert len(got) == 1 and got[0].user_turns == 1 and got[0].tool_calls.get("bash") == 1 and got[0].asks.get("status or steering") == 1, "pi adapter"
+        g_dir = os.path.join(tmp, "gem", "abc", "chats")
+        os.makedirs(g_dir)
+        with open(os.path.join(g_dir, "session-1.jsonl"), "w") as fh:
+            fh.write(json.dumps({"sessionId": "g1", "startTime": "2026-01-01T10:00:00Z", "directories": ["/tmp/proj"]}) + "\n")
+            fh.write(json.dumps({"type": "user", "timestamp": "2026-01-01T10:01:00Z", "content": "fix the failing test"}) + "\n")
+            fh.write(json.dumps({"type": "gemini", "timestamp": "2026-01-01T10:02:00Z", "toolCalls": [{"name": "run_shell_command"}]}) + "\n")
+        got = scan_gemini(os.path.join(tmp, "gem"), None, tz)
+        assert len(got) == 1 and got[0].user_turns == 1 and got[0].tool_calls.get("run_shell_command") == 1, "gemini adapter"
+        amp_dir = os.path.join(tmp, "amp")
+        os.makedirs(amp_dir)
+        json.dump({"id": "T-1", "created": 1767261600000, "messages": [{"role": "user", "content": [{"type": "text", "text": "review this PR"}]}, {"role": "assistant", "content": [{"type": "tool_use", "name": "Read"}]}]}, open(os.path.join(amp_dir, "T-1.json"), "w"))
+        got = scan_amp(amp_dir, None, tz)
+        assert len(got) == 1 and got[0].user_turns == 1 and got[0].tool_calls.get("Read") == 1, "amp adapter"
+        print("adapter self-test ok", file=sys.stderr)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1161,12 +1498,14 @@ def main():
     ap.add_argument("--no-codex", action="store_true", help="skip Codex threads")
     ap.add_argument("--no-cursor", action="store_true", help="skip Cursor agent chats")
     ap.add_argument("--no-opencode", action="store_true", help="skip OpenCode sessions")
+    ap.add_argument("--no-other", action="store_true", help="skip Pi, Droid, Gemini CLI, Amp, Copilot CLI, Goose, Hermes")
     ap.add_argument("--user-turns", metavar="SESSION_ID", default=None,
                     help="print one session's human turns (redacted) to stdout and exit; id prefix allowed")
     ap.add_argument("--max-chars", type=int, default=700, help="truncate each printed turn (with --user-turns)")
     args = ap.parse_args()
     if args.self_test:
         self_test()
+        self_test_adapters()
         return
     if args.user_turns:
         sys.exit(print_user_turns(args.projects_dir, args.user_turns, args.max_chars))
@@ -1203,6 +1542,8 @@ def main():
         opencode_sessions = scan_opencode(args.since_days, tz)
         sessions.extend(opencode_sessions)
         print(f"[opencode] {len(opencode_sessions)} sessions", file=sys.stderr)
+    other = [] if args.no_other else scan_other_harnesses(args.since_days, tz)
+    sessions.extend(other)
     sessions = [s for s in sessions if s.start]
     sessions.sort(key=lambda s: s.start)
     rows = [s.row() for s in sessions]

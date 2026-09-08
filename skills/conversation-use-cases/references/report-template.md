@@ -1,10 +1,10 @@
-# Generative UI use-cases from my agent sessions
+# Conversation use-cases from my agent sessions
 
-Generated locally with `mining-generative-ui-use-cases` on <YYYY-MM-DD>. Numbers come from `session_miner_output.json`. No message text, credentials, or names of other people are in this file. Section 8 is in my own words.
+Generated locally with `conversation-use-cases` on <YYYY-MM-DD>. Numbers come from `session_miner_output.json`. Intents are described in my words; no message text, credentials, or names of other people are in this file. Section 8 is verbatim from me.
 
 ## 0. Harnesses found (REQUIRED)
 
-| Harness | Sessions parsed or "detected only" | Window |
+| Harness | Sessions parsed, or "detected only" | Window |
 |---|---|---|
 | | | |
 
@@ -19,9 +19,13 @@ Generated locally with `mining-generative-ui-use-cases` on <YYYY-MM-DD>. Numbers
 | Share of my messages under 15 words / over 100 words | |
 | Turns after 22:00 local | |
 
-## 2. What I ask for (REQUIRED)
+## 2. Intents: what I ask for (REQUIRED)
 
-Table from "What the human turns ask for", top 8 rows, plus one line on what dominates.
+From "What the human turns ask for", top 8 categories. One line per category describing the typical intent in my own words, never a quote.
+
+| Category | Turns | Typical intent (my words) |
+|---|---|---|
+| | | |
 
 ## 3. How I steer and give feedback (REQUIRED)
 
@@ -36,7 +40,7 @@ Table from "What the human turns ask for", top 8 rows, plus one line on what dom
 | Messages with pasted screenshots | | |
 | Conciseness requests | | |
 
-One line each, categories only: how a status ask usually looks (length, what it asks for); how feedback arrives (single line vs bulleted batch, with screenshots or not); how decisions get answered.
+One line each, in my words: how a status ask usually goes; how feedback arrives (single line or bulleted batch, with screenshots or not); how decisions get answered.
 
 ## 4. How work is tracked (REQUIRED)
 
@@ -56,7 +60,7 @@ One line each, categories only: how a status ask usually looks (length, what it 
 |---|---|---|
 | | | |
 
-Skills invoked (top 8), CLIs dominating Bash (top 8), permission modes seen.
+Skills invoked (top 8), CLIs dominating Bash (top 8), permission modes, models seen.
 
 ## 6. Where chat fails me (REQUIRED)
 
@@ -66,13 +70,13 @@ Ranked. Each item: the moment, the metric that shows it, the count.
 2.
 3.
 
-## 7. Ranked generative UI use-cases (REQUIRED)
+## 7. Ranked use-cases where UI beats chat (REQUIRED)
 
-| # | Use-case | Trigger | Shows | You can | Evidence (metric, count) | Beats text because |
-|---|---|---|---|---|---|---|
-| 1 | | | | | | |
-| 2 | | | | | | |
-| 3 | | | | | | |
+| # | Use-case | Intent served | Trigger | Shows | You can | Evidence (metric, count) | Beats text because |
+|---|---|---|---|---|---|---|---|
+| 1 | | | | | | | |
+| 2 | | | | | | | |
+| 3 | | | | | | | |
 
 ## 8. In my own words (REQUIRED, from the interview)
 
@@ -84,7 +88,7 @@ Ranked. Each item: the moment, the metric that shows it, the count.
 
 ## Privacy gate (all four must be true before sharing)
 
-- [ ] No message text, quoted or paraphrased, except my interview answers
+- [ ] No message text: intents are in my words, only interview answers are verbatim
 - [ ] The secret-shaped string count was checked; real credentials found in my history are rotated
 - [ ] No names of other people, customers, or private links
 - [ ] Temporary files deleted
