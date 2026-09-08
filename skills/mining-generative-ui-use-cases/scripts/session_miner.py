@@ -2,7 +2,8 @@
 """Quantitative, privacy-preserving miner for local agent transcripts.
 
 Reads every Claude Code session under a projects directory (default
-~/.claude/projects), plus Codex CLI threads under ~/.codex, and emits counts only: no message text, no file paths,
+~/.claude/projects), plus Codex CLI threads under ~/.codex and Cursor agent chats from its
+state.vscdb, and emits counts only: no message text, no file paths,
 no command bodies ever reach the output. Standard library only.
 
 Layout assumed (as written by Claude Code):
@@ -45,6 +46,9 @@ markdown file verbatim to the end of the report.
 """
 
 import argparse
+import sqlite3
+import glob
+from urllib.parse import unquote
 import json
 import math
 import os
@@ -573,6 +577,7 @@ def render_report(agg, rows, scope, tz_name):
         ("projects dir", scope["projects_dir"]),
         ("Claude Code session files", scope["session_files"]),
         ("Codex thread files", scope.get("codex_files", 0)),
+        ("Cursor agent chats", scope.get("cursor_sessions", 0)),
         ("subagent files", agg["subagent_files"]),
         ("skipped files", scope["skipped_files"]),
         ("since days", scope["since_days"] or "all"),
@@ -912,10 +917,10 @@ KNOWN_STORES = [
     ("gemini-cli", "~/.gemini/tmp", "detected only"),
     ("amp", "~/.local/share/amp", "detected only"),
     ("amp (alt)", "~/.amp", "detected only"),
-    ("cursor", "~/Library/Application Support/Cursor/User/globalStorage", "detected only; SQLite state.vscdb"),
+    ("cursor", "~/Library/Application Support/Cursor/User/globalStorage", "parsed"),
     ("cline", "~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev", "detected only"),
-    ("copilot-cli", "~/.copilot", "detected only"),
-    ("aider", "~/.aider", "detected only; chat history is per repo (.aider.chat.history.md)"),
+    ("copilot-cli", "~/.copilot", "detected only; holds hooks and skills, no sessions"),
+    ("aider", "~/.aider", "detected only; chat history is per repo (.aider.chat.history.md), not parsed"),
     ("kiro", "~/.kiro", "detected only"),
     ("hermes", "~/.hermes", "detected only"),
     ("orca", "~/Library/Application Support/Orca", "metadata only; its sessions are Claude Code or Codex files"),
@@ -961,6 +966,104 @@ def print_codex_user_turns(path, max_chars):
     print(f"# {n} human turns, redacted, stdout only", file=sys.stderr)
     return 0
 
+CURSOR_USER_DIR = os.path.expanduser("~/Library/Application Support/Cursor/User")
+
+
+def cursor_workspace_labels(db):
+    labels = {}
+    for wj in glob.glob(os.path.join(CURSOR_USER_DIR, "workspaceStorage", "*", "workspace.json")):
+        try:
+            j = json.load(open(wj))
+        except Exception:
+            continue
+        uri = j.get("folder") or j.get("workspace") or ""
+        labels[os.path.basename(os.path.dirname(wj))] = codex_project_label(unquote(str(uri).replace("file://", "")))
+    try:
+        r = db.execute("select value from ItemTable where key='glass.localAgentProjects.v1'").fetchone()
+        for proj in (json.loads(r[0]) if r else []):
+            ws = proj.get("workspace") or {}
+            path = (ws.get("uri") or {}).get("path") or proj.get("name") or ""
+            labels.setdefault(ws.get("id"), codex_project_label(str(path)))
+    except Exception:
+        pass
+    return labels
+
+
+def scan_cursor(since_days, tz):
+    """Cursor agent chats live in globalStorage/state.vscdb: composerHeaders (index) and
+    cursorDiskKV rows composerData:<id> and bubbleId:<composer>:<bubble>. Bubble type 1 is the
+    human, type 2 the assistant; a type 2 bubble with toolFormerData is one tool call. Subagent
+    composers (isSubagent=1) are attributed to the parent as subagent tool calls."""
+    db_path = os.path.join(CURSOR_USER_DIR, "globalStorage", "state.vscdb")
+    if not os.path.isfile(db_path):
+        return []
+    cutoff_ms = (time.time() - since_days * 86400) * 1000 if since_days else None
+    try:
+        db = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
+        db.execute("select 1 from composerHeaders limit 1")
+    except sqlite3.Error:
+        return []
+    labels = cursor_workspace_labels(db)
+    sessions = {}
+    order = []
+    rows = db.execute("select composerId, workspaceId, createdAt, lastUpdatedAt, isSubagent, value from composerHeaders").fetchall()
+    for cid, wid, created, updated, is_sub, hv in rows:
+        if cutoff_ms and updated and updated < cutoff_ms:
+            continue
+        try:
+            head = json.loads(hv) if hv else {}
+        except Exception:
+            head = {}
+        parent = cid
+        if is_sub:
+            parent = ((head.get("subagentInfo") or {}).get("parentComposerId")) or cid
+        sess = sessions.get(parent)
+        if sess is None:
+            sess = Session(parent, labels.get(wid) or (wid if wid else "(unknown)"))
+            sess.harness = "cursor"
+            sess.entrypoint = str(head.get("unifiedMode") or "agent")[:20]
+            sessions[parent] = sess
+            order.append(parent)
+        if is_sub:
+            sess.subagent_files += 1
+        r = db.execute("select value from cursorDiskKV where key=?", (f"composerData:{cid}",)).fetchone()
+        if not r:
+            continue
+        try:
+            cd = json.loads(r[0])
+        except Exception:
+            continue
+        mname = (cd.get("modelConfig") or {}).get("modelName")
+        if mname:
+            sess.models[str(mname)[:40]] += 1
+        for hdr in cd.get("fullConversationHeadersOnly") or []:
+            b = db.execute("select value from cursorDiskKV where key=?", (f"bubbleId:{cid}:{hdr.get('bubbleId')}",)).fetchone()
+            if not b:
+                continue
+            try:
+                bub = json.loads(b[0])
+            except Exception:
+                continue
+            ts = parse_ts(bub.get("createdAt"))
+            if bub.get("type") == 1:
+                text = bub.get("text") or ""
+                if is_sub or not text.strip():
+                    continue
+                sess.touch(ts)
+                sess.human_turn(text, ts, tz)
+            elif bub.get("type") == 2:
+                tf = bub.get("toolFormerData")
+                if tf:
+                    name = str(tf.get("name") or "(unnamed)")[:60]
+                    if is_sub:
+                        sess.sub_tool_calls[name] += 1
+                    else:
+                        sess.tool(name, ts)
+                elif not is_sub:
+                    sess.assistant_turn(ts, bub.get("requestId") or hdr.get("bubbleId") or "?", False)
+    db.close()
+    return [sessions[k] for k in order]
+
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -975,6 +1078,7 @@ def main():
     ap.add_argument("--discover", action="store_true", help="list known agent stores present on this machine and exit")
     ap.add_argument("--codex-dir", default=os.path.expanduser("~/.codex"))
     ap.add_argument("--no-codex", action="store_true", help="skip Codex threads")
+    ap.add_argument("--no-cursor", action="store_true", help="skip Cursor agent chats")
     ap.add_argument("--user-turns", metavar="SESSION_ID", default=None,
                     help="print one session's human turns (redacted) to stdout and exit; id prefix allowed")
     ap.add_argument("--max-chars", type=int, default=700, help="truncate each printed turn (with --user-turns)")
@@ -1007,6 +1111,11 @@ def main():
             if s is not None:
                 sessions.append(s)
             print(f"[codex {i}/{len(codex_files)}] {os.path.basename(path)[:40]} turns={s.user_turns if s else 0}", file=sys.stderr)
+    cursor_sessions = []
+    if not args.no_cursor:
+        cursor_sessions = scan_cursor(args.since_days, tz)
+        sessions.extend(cursor_sessions)
+        print(f"[cursor] {len(cursor_sessions)} agent chats", file=sys.stderr)
     sessions = [s for s in sessions if s.start]
     sessions.sort(key=lambda s: s.start)
     rows = [s.row() for s in sessions]
@@ -1016,6 +1125,7 @@ def main():
         "projects_dir": args.projects_dir,
         "session_files": len(found),
         "codex_files": len(codex_files),
+        "cursor_sessions": len(cursor_sessions),
         "skipped_files": len(skipped),
         "skipped_reasons": dict(Counter(reason for _p, reason in skipped)),
         "since_days": args.since_days,
