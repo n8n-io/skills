@@ -2,8 +2,8 @@
 """Quantitative, privacy-preserving miner for local agent transcripts.
 
 Reads every Claude Code session under a projects directory (default
-~/.claude/projects), plus Codex CLI threads under ~/.codex and Cursor agent chats from its
-state.vscdb, and emits counts only: no message text, no file paths,
+~/.claude/projects), plus Codex CLI threads under ~/.codex Cursor agent chats from its
+state.vscdb, and OpenCode sessions from opencode.db, and emits counts only: no message text, no file paths,
 no command bodies ever reach the output. Standard library only.
 
 Layout assumed (as written by Claude Code):
@@ -48,6 +48,8 @@ markdown file verbatim to the end of the report.
 import argparse
 import sqlite3
 import glob
+import shutil
+import tempfile
 from urllib.parse import unquote
 import json
 import math
@@ -578,6 +580,7 @@ def render_report(agg, rows, scope, tz_name):
         ("Claude Code session files", scope["session_files"]),
         ("Codex thread files", scope.get("codex_files", 0)),
         ("Cursor agent chats", scope.get("cursor_sessions", 0)),
+        ("OpenCode sessions", scope.get("opencode_sessions", 0)),
         ("subagent files", agg["subagent_files"]),
         ("skipped files", scope["skipped_files"]),
         ("since days", scope["since_days"] or "all"),
@@ -911,7 +914,7 @@ KNOWN_STORES = [
     ("claude-code", "~/.claude/projects", "parsed"),
     ("codex", "~/.codex/sessions", "parsed"),
     ("codex (archived)", "~/.codex/archived_sessions", "parsed"),
-    ("opencode", "~/.local/share/opencode", "detected only; parser pending"),
+    ("opencode", "~/.local/share/opencode", "parsed (opencode.db)"),
     ("pi", "~/.pi/agent/sessions", "detected only"),
     ("goose", "~/.local/share/goose/sessions", "detected only"),
     ("gemini-cli", "~/.gemini/tmp", "detected only"),
@@ -1064,6 +1067,84 @@ def scan_cursor(since_days, tz):
     db.close()
     return [sessions[k] for k in order]
 
+OPENCODE_DIR = os.path.expanduser("~/.local/share/opencode")
+
+
+def ms_ts(v):
+    try:
+        return datetime.fromtimestamp(float(v) / 1000.0, tz=timezone.utc) if v else None
+    except (TypeError, ValueError, OSError):
+        return None
+
+
+def scan_opencode(since_days, tz):
+    """OpenCode keeps sessions in ~/.local/share/opencode/opencode.db (SQLite, WAL): tables
+    session, message (data json = Message minus id/sessionID), part (data json = Part minus ids).
+    A user message's text is its text parts; an assistant tool call is one part with type "tool"
+    and the tool name in part.tool. Older builds used storage/{session,message,part}/*.json with
+    the same shapes. The db and its WAL are copied to a temp dir and opened read-only so the live
+    files are never touched. Not yet validated on a machine with real sessions."""
+    out = []
+    db_path = os.path.join(OPENCODE_DIR, "opencode.db")
+    cutoff_ms = (time.time() - since_days * 86400) * 1000 if since_days else None
+    if os.path.isfile(db_path):
+        tmp = tempfile.mkdtemp(prefix="oc-miner-")
+        try:
+            for suf in ("", "-wal", "-shm"):
+                src = db_path + suf
+                if os.path.exists(src):
+                    shutil.copy2(src, os.path.join(tmp, os.path.basename(src)))
+            con = sqlite3.connect(f"file:{os.path.join(tmp, 'opencode.db')}?mode=ro", uri=True)
+            con.row_factory = sqlite3.Row
+            projects = {r["id"]: r["worktree"] for r in con.execute("select id, worktree from project")}
+            for srow in con.execute("select * from session order by time_created"):
+                if cutoff_ms and srow["time_updated"] and srow["time_updated"] < cutoff_ms:
+                    continue
+                sess = Session(srow["id"], codex_project_label(str(projects.get(srow["project_id"]) or srow["directory"] or "")))
+                sess.harness = "opencode"
+                sess.entrypoint = str(srow["agent"] or "")[:20] or None
+                if srow["parent_id"]:
+                    continue
+                sess.touch(ms_ts(srow["time_created"]))
+                parts = defaultdict(list)
+                for prow in con.execute("select * from part where session_id=? order by id", (srow["id"],)):
+                    try:
+                        parts[prow["message_id"]].append(json.loads(prow["data"]))
+                    except Exception:
+                        continue
+                for mrow in con.execute("select * from message where session_id=? order by time_created, id", (srow["id"],)):
+                    try:
+                        m = json.loads(mrow["data"])
+                    except Exception:
+                        continue
+                    ts = ms_ts(mrow["time_created"])
+                    ps = parts.get(mrow["id"], [])
+                    if m.get("role") == "user":
+                        text = "\n".join(p.get("text", "") for p in ps if p.get("type") == "text" and not p.get("synthetic"))
+                        if text.strip():
+                            sess.touch(ts)
+                            sess.human_turn(text, ts, tz)
+                        mdl = m.get("model") or {}
+                        if mdl.get("modelID"):
+                            sess.models[str(mdl["modelID"])[:40]] += 1
+                    else:
+                        if m.get("modelID"):
+                            sess.models[str(m["modelID"])[:40]] += 1
+                        tools = [p for p in ps if p.get("type") == "tool"]
+                        for p in tools:
+                            sess.tool(p.get("tool"), ts)
+                        if not tools:
+                            sess.assistant_turn(ts, mrow["id"], False)
+                sub = con.execute("select count(*) from session where parent_id=?", (srow["id"],)).fetchone()
+                sess.subagent_files = sub[0] if sub else 0
+                out.append(sess)
+            con.close()
+        except sqlite3.Error as e:
+            print(f"[opencode] could not read {db_path}: {e}", file=sys.stderr)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+    return out
+
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1079,6 +1160,7 @@ def main():
     ap.add_argument("--codex-dir", default=os.path.expanduser("~/.codex"))
     ap.add_argument("--no-codex", action="store_true", help="skip Codex threads")
     ap.add_argument("--no-cursor", action="store_true", help="skip Cursor agent chats")
+    ap.add_argument("--no-opencode", action="store_true", help="skip OpenCode sessions")
     ap.add_argument("--user-turns", metavar="SESSION_ID", default=None,
                     help="print one session's human turns (redacted) to stdout and exit; id prefix allowed")
     ap.add_argument("--max-chars", type=int, default=700, help="truncate each printed turn (with --user-turns)")
@@ -1116,6 +1198,11 @@ def main():
         cursor_sessions = scan_cursor(args.since_days, tz)
         sessions.extend(cursor_sessions)
         print(f"[cursor] {len(cursor_sessions)} agent chats", file=sys.stderr)
+    opencode_sessions = []
+    if not args.no_opencode:
+        opencode_sessions = scan_opencode(args.since_days, tz)
+        sessions.extend(opencode_sessions)
+        print(f"[opencode] {len(opencode_sessions)} sessions", file=sys.stderr)
     sessions = [s for s in sessions if s.start]
     sessions.sort(key=lambda s: s.start)
     rows = [s.row() for s in sessions]
@@ -1126,6 +1213,7 @@ def main():
         "session_files": len(found),
         "codex_files": len(codex_files),
         "cursor_sessions": len(cursor_sessions),
+        "opencode_sessions": len(opencode_sessions),
         "skipped_files": len(skipped),
         "skipped_reasons": dict(Counter(reason for _p, reason in skipped)),
         "since_days": args.since_days,

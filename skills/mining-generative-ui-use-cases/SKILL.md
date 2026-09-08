@@ -1,6 +1,6 @@
 ---
 name: mining-generative-ui-use-cases
-description: Use when you want to find where generative UI would help, based on how you actually work with coding agents (Claude Code, Codex): what you ask them, how you steer and correct them, how you check status, how you track their work and yours, which integrations you use. Also for a team collecting this from several people to design agent interfaces.
+description: Use when you want to find where generative UI would help, based on how you actually work with coding agents (Claude Code, Codex, Cursor, OpenCode): what you ask them, how you steer and correct them, how you check status, how you track their work and yours, which integrations you use. Also for a team collecting this from several people to design agent interfaces.
 ---
 
 # Mining Generative UI Use-Cases
