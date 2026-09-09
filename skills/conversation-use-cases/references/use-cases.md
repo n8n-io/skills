@@ -19,4 +19,23 @@ Metric names in the Gate column are the report's own tables: Agent dispatches; T
 | 11 | Analytics query workbench | A SQL or analytics result is produced | Query, result table, chart, filters, confidence tier | Edit a filter and rerun, pin the query to a doc, change the window | "analytics or data" ask turns, MCP servers posthog, bigquery, neon | "analytics or data" ask turns > 0, or any of those MCP servers > 0 |
 | 12 | Return-to-session brief | Reopening a session after a gap | What changed, what settled, what needs you, what failed since your last turn | Jump to the item, acknowledge, continue | Resumptions and "What I ask when I come back", longest gap between turns, turns in hours 22 and 23, ScheduleWakeup | resumptions > 0, or longest gap between two human turns > 30 min, or human turns in hours 22 and 23 > 0 |
 
-Ranking in section 7 of the template uses the first metric in the Evidence column as the count; the others are context for the interview.
+Ranking in section 7 of the template orders by Fit first, then by evidence share: the first metric in the Evidence column divided by the denominator below.
+
+## Pictures, denominators and the chat contrast
+
+Read the Picture and the "In chat today" line into the Fit question so the person can imagine the card. The denominator turns the evidence count into a share for section 7.
+
+| # | Picture (what is on screen) | In chat today | Denominator |
+|---|---|---|---|
+| 1 | A board beside the conversation: one card per plan item moving through queued, running, review and done, agents as chips with elapsed time | You ask "what's the status" and read a paragraph | main-thread tool calls |
+| 2 | A short list beside the conversation of steps only you can do, each with one button, secrets typed into a masked field | "Please add the key and tell me when done", buried in a long reply | human turns |
+| 3 | A grid of claimed items against merged, CI, deployed and data landed, a green or red probe result in each cell | "Done. All tests pass." and you check by hand | human turns |
+| 4 | All open questions on one form, each with a default and an impact note, plus a log of past decisions with who decided and why | Questions inside paragraphs, answered as "Q1: yes, Q2: no" | human turns |
+| 5 | The plan with every changed block marked kept, added or removed, a density slider from outline to prose, comments pinned to passages | A rewritten plan pasted whole, diffed in your head | main-thread tool calls |
+| 6 | A grid of screenshots per view with changes highlighted, and pins you and the agent place that become tasks | Pasted images referenced as Image 1, Image 2 inside a bullet list | human turns |
+| 7 | Your bulleted feedback as rows: the agent's reading of each bullet and its state (done, doing, skipped, needs you) | A summary that may silently drop items | human turns |
+| 8 | The message rendered as the recipient will see it, destination shown, tone and length as toggles, and you press send | Text you copy, paste and fix | main-thread tool calls |
+| 9 | A stepper for a multi-step automation with proof per step (receipt number, file) and the failing step explained with a retry | "Did we send the email?" 45 minutes later | main-thread tool calls |
+| 10 | For any run over two minutes: phases, elapsed time, last error, log tail, retry and cancel; services with health and URL | Silence, then "no response" messages | human turns |
+| 11 | Query, result table and chart together, filters you can change and rerun, a confidence tier | SQL in a code block and a markdown table | human turns |
+| 12 | When you come back: what changed, what settled, what needs you, what failed, each linking to the item | Scrolling back through everything since you left | human turns |

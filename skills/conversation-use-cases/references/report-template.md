@@ -8,6 +8,8 @@ Generated locally with `conversation-use-cases` on <YYYY-MM-DD>. Numbers come fr
 |---|---|---|
 | | | |
 
+Programmatic sessions excluded (one-shot harness runs the script detected): sessions, human turns, projects, or "none detected". Every number below excludes them unless this line says they were kept.
+
 ## 1. Volume and shape (REQUIRED)
 
 | Metric | Value |
@@ -41,6 +43,7 @@ From "What the human turns ask for", top 8 categories. One line per category des
 | Conciseness requests | | |
 | Feedback batches (3+ bullets), of which with screenshots | | |
 | Resumptions (my turn 30+ min after my previous one) | | |
+| Frustrated messages (exasperation markers, upper bound), and the top two things the agent had just done before them | | |
 
 One line each, in my words: how a status ask usually goes; how feedback arrives (single line or bulleted batch, with screenshots or not); how decisions get answered.
 
@@ -78,9 +81,9 @@ Ranked. Each item: the moment, the metric that shows it, the count.
 
 ## 7. Ranked use-cases where UI beats chat (REQUIRED)
 
-Cards come from `references/use-cases.md`. Rank = evidence count x fit weight from 8c (fits 2, sometimes 1, no 0). Cards not asked rank by evidence count alone and carry "not asked" in the Fit column.
+Cards come from `references/use-cases.md`. Order by Fit from 8c first: fits, sometimes, hard to imagine, no, then not asked. Within the same Fit, order by evidence share: the evidence count divided by the denominator named for that card in `use-cases.md` (human turns, sessions or main-thread tool calls), written as a percentage with its denominator. Counts on different scales are never compared to each other.
 
-| # | Use-case | Intent served | Trigger | Shows | You can | Evidence (metric, count) | Fit (8c) | Rank score | Beats text because |
+| # | Use-case | Intent served | Trigger | Shows | You can | Evidence (metric, count) | Fit (8c) | Evidence share | Beats text because |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | | | | | | | | | |
 | 2 | | | | | | | | | |
@@ -101,14 +104,14 @@ Chosen options and free text recorded as given. Nothing inferred.
 ### 8b. Issues and concerns (always asked)
 
 1. What bothers you most when working with agents?
-2. What have you stopped asking agents to do, and why?
+2. Is there anything you used to hand to the agent and now do yourself again? Why?
 3. What do you still do by hand because the agent gets it wrong?
 4. What do you not trust the agent to report?
 5. What should never be automated for you?
 
 ### 8c. Use-case cards (asked when the gate in `references/use-cases.md` fires)
 
-Fit is one of: fits, sometimes, no, not asked.
+Fit is one of: fits, sometimes, no, hard to imagine (the person could not judge without seeing it), not asked.
 
 | # | Use-case | Fit | What it must show | What you would click |
 |---|---|---|---|---|

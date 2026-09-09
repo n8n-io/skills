@@ -41,9 +41,18 @@ Heuristics with known ceilings:
     features are bullet count (feedback batch at 3+ bullets, with or
     without images) and resumption (30+ min after the previous human turn).
 
+  * programmatic: a project where 80%+ of 10+ sessions are one-shot runs
+    (at most one human turn, no tool calls, or an SDK entrypoint) is a
+    harness; its sessions are excluded from every count unless
+    --include-programmatic is given, and the exclusion is reported.
+  * frustration: human turns with an exasperation marker, counted together
+    with what the assistant had just done (done claim, long reply, prose
+    question, retraction, options, a run over 2 minutes, a tool error).
+  * --tz defaults to this machine's zone.
+
 Usage:
     python3 session_miner.py --out DIR [--projects-dir P] [--since-days N]
-                             [--exclude ID ...] [--tz Europe/Lisbon]
+                             [--exclude ID ...] [--tz ZONE] [--include-programmatic]
                              [--weeks 12] [--notes FILE] [--self-test]
                              [--discover] [--user-turns ID] [--no-codex]
                              [--no-cursor] [--no-opencode] [--no-other]
@@ -124,8 +133,21 @@ MCP_READ_RE = re.compile(r"(^|[_\-])(get|list|search|read|fetch|query|describe|f
 MCP_WRITE_RE = re.compile(r"(^|[_\-])(create|update|delete|send|post|save|set|add|move|publish|reply|upload|write|execute|run|deploy|archive|share|mutate|remove|forward|trash|label|mark|merge|submit|start|stop|restart|reset)", re.I)
 MCP_DRAFT_RE = re.compile(r"draft", re.I)
 MCP_SEND_RE = re.compile(r"(^|[_\-])(send|post|reply|forward)($|[_\-])", re.I)
-TRACKING_TOOLS = ("TaskCreate", "TaskUpdate", "TaskList", "ScheduleWakeup", "Monitor", "PushNotification", "AskUserQuestion",
-                  "SendUserFile", "Artifact", "Agent", "SendMessage", "Skill")
+DISPATCH_TOOLS = ("Agent", "Task", "spawn_agent")
+QUESTION_TOOLS = ("AskUserQuestion", "request_user_input", "ask_user_question", "ask_user", "question")
+TRACKING_TOOLS = ("TaskCreate", "TaskUpdate", "TaskList", "TodoWrite", "todo_write", "update_plan", "update_current_step",
+                  "ScheduleWakeup", "Monitor", "PushNotification", "SendUserFile", "Artifact", "SendMessage", "Skill") + QUESTION_TOOLS + DISPATCH_TOOLS
+FRUSTRATION_RE = [re.compile(pat, re.I) for pat in (
+    r"\bwtf\b", r"\bffs\b", r"\bI (already )?told you\b", r"\bI already (said|asked|mentioned|explained)\b",
+    r"\bwhy (did|do|would|are) you\b", r"\bstop (doing|adding|changing|removing|ignoring|repeating)\b", r"\bnot again\b",
+    r"\bthis is (wrong|broken|not working|useless|unacceptable)\b", r"!{2,}", r"\b(damn|shit|fuck|crap)\w*",
+    r"\bfor the (second|third|2nd|3rd|nth|last) time\b", r"\bdon'?t ever\b", r"\bnever (do|add|change|touch) that again\b",
+    r"\bare you (kidding|serious|listening|even)\b", r"\byou (keep|still|again) (doing|ignoring|adding|breaking|changing)\b",
+    r"\bnot what I asked\b", r"\bunbelievable\b", r"\bI give up\b",
+)]
+PROGRAMMATIC_SHARE = 0.8
+PROGRAMMATIC_MIN_SESSIONS = 10
+PROGRAMMATIC_ENTRYPOINTS = ("sdk", "codex_exec", "codex_sdk")
 PROBE_HEADS = {"lsof", "curl", "ps", "pgrep", "netstat", "nc", "wget", "ping", "kill", "pkill", "sleep", "until"}
 ENV_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 SEGMENT_RE = re.compile(r"^(?:[^\n;&|]|&(?!&)|\|(?!\|))*?(?:&&|\|\||;|\n)\s*")
@@ -135,7 +157,7 @@ ACTIVE_GAP_CAP_S = 900
 EDIT_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
 
 FEEDBACK = {
-    "numbered_answers": [r"(?m)^Q\d+\s*[:.\-]"],
+    "numbered_answers": [r"(?m)^\s*Q\s*\d{1,2}\s*[:.)\-]", r"(?m)^\s*\d{1,2}\s*[:.)\-]\s*\S.{0,60}$", r"(?m)^\s*[A-Da-d]\s*[:.)]\s*\S.{0,60}$"],
     "corrections": [
         r"\bno,", r"\bnot what\b", r"\bI do not want\b", r"\bI don'?t want\b", r"\bwrong\b",
         r"\bagain\b", r"\byou should\b", r"\bbe more concise\b", r"\btoo long\b", r"\bremove\b",
@@ -260,6 +282,13 @@ class Session:
         self.pr_links = 0
         self.longest_gap_s = 0.0
         self.asks = Counter()
+        self.msgs_with_images = 0
+        self.frustration = 0
+        self.frustration_after = Counter()
+        self.frustration_asks = Counter()
+        self.last_asst_flags = set()
+        self.last_run_long = False
+        self.last_tool_error = False
         self.asks_all = Counter()
         self.batch_bullets = []
         self.batches_with_images = 0
@@ -290,6 +319,7 @@ class Session:
 
     def close_run(self, ts):
         if self.run_open:
+            self.last_run_long = self.run_active_s > LONG_RUN_S
             self.runs_tools.append(self.run_tools)
             self.runs_s.append(self.run_active_s)
         self.run_open = False
@@ -311,30 +341,40 @@ class Session:
 
     def tool_result(self, name, is_error):
         self.agent_sig["tool_results"] += 1
+        if is_error:
+            self.last_tool_error = True
         if is_error and name:
             self.error_tools.add(name)
 
     def assistant_text(self, text, tools):
-        if "AskUserQuestion" in tools:
+        structured = any(t in QUESTION_TOOLS for t in tools)
+        if structured:
             self.agent_sig["structured_questions"] += 1
         text = text.strip() if isinstance(text, str) else ""
         if not text:
             return
+        flags = set()
         self.agent_sig["assistant_text_msgs"] += 1
         self.asst_lens.append(len(text))
         if len(text) > LONG_REPLY_CHARS:
             self.agent_sig["long_replies"] += 1
+            flags.add("long_reply")
         if AGENT_RE["done_claims"].search(text[:200]):
             self.agent_sig["done_claims"] += 1
             self.pending_done = True
-        if "?" in text and "AskUserQuestion" not in tools and AGENT_RE["prose_questions"].search(text):
+            flags.add("done_claim")
+        if "?" in text and not structured and AGENT_RE["prose_questions"].search(text):
             self.agent_sig["prose_questions"] += 1
+            flags.add("prose_question")
         for k in ("blocked_on_user", "retractions"):
             if AGENT_RE[k].search(text):
                 self.agent_sig[k] += 1
+                flags.add(k[:-1] if k == "retractions" else k)
         if len(OPTION_LINE_RE.findall(text)) >= 2 or len(LETTER_LINE_RE.findall(text)) >= 2 or (
                 {"1", "2"} <= set(NUMBERED_LINE_RE.findall(text)) and ALTERNATIVE_RE.search(text)):
             self.agent_sig["options_offered"] += 1
+            flags.add("options_offered")
+        self.last_asst_flags = flags
 
     def flush_msg(self):
         if self.cur_msg_id is not None:
@@ -367,8 +407,8 @@ class Session:
             self.mcp[(m.group(1), m.group(2))] += 1
         elif name == "Skill":
             self.skills[str(inp.get("skill") or "(unknown)")[:60]] += 1
-        elif name == "Agent":
-            self.agent_types[str(inp.get("subagent_type") or "(default)")[:40]] += 1
+        elif name in DISPATCH_TOOLS:
+            self.agent_types[str(inp.get("subagent_type") or ("(default)" if name == "Agent" else name))[:40]] += 1
             self.agent_per_msg[msg_id] += 1
         elif name == "Artifact":
             self.artifact_actions[str(inp.get("action") or "publish")[:30]] += 1
@@ -452,11 +492,27 @@ class Session:
             self.words_long += 1
         images += len(IMAGE_RE.findall(text))
         self.pasted_images += images
+        if images:
+            self.msgs_with_images += 1
         self.secret_like += len(SECRET_RE.findall(text))
         labels = classify_asks(text)
         self.asks[labels[0]] += 1
         self.asks_all.update(labels)
         bullets = len(BULLET_RE.findall(text))
+        if any(rx.search(text) for rx in FRUSTRATION_RE):
+            self.frustration += 1
+            self.frustration_asks[labels[0]] += 1
+            for fl in self.last_asst_flags:
+                self.frustration_after[fl] += 1
+            if self.last_run_long:
+                self.frustration_after["long_run"] += 1
+            if self.last_tool_error:
+                self.frustration_after["tool_error"] += 1
+            if not self.last_asst_flags and not self.last_run_long and not self.last_tool_error:
+                self.frustration_after["nothing flagged"] += 1
+        self.last_asst_flags = set()
+        self.last_run_long = False
+        self.last_tool_error = False
         if bullets >= BATCH_MIN_BULLETS:
             self.batch_bullets.append(bullets)
             self.batches_with_images += 1 if images else 0
@@ -476,11 +532,15 @@ class Session:
         self.last_assistant_block = None
         for cat, pats in FEEDBACK_RE.items():
             hit = False
+            total = 0
             for pat, rx in pats:
                 n = len(rx.findall(text))
                 if n:
                     hit = True
+                    total += n
                     self.markers[(cat, pat)] += n
+            if cat == "numbered_answers" and not FEEDBACK_RE[cat][0][1].search(text) and (total < 2 or total < bullets):
+                hit = False
             if hit:
                 self.feedback[cat] += 1
 
@@ -526,12 +586,12 @@ class Session:
             "tool_calls": sum(self.tool_calls.values()),
             "subagent_files": self.subagent_files,
             "subagent_tool_calls": sum(self.sub_tool_calls.values()),
-            "agent_dispatches": self.tool_calls.get("Agent", 0),
+            "agent_dispatches": sum(self.tool_calls.get(t, 0) for t in DISPATCH_TOOLS),
             "parallel_dispatch_msgs": sum(1 for v in self.agent_per_msg.values() if v >= 2),
             "max_fanout": max(self.agent_per_msg.values(), default=0),
             "skill_calls": self.tool_calls.get("Skill", 0),
             "artifact_calls": self.tool_calls.get("Artifact", 0),
-            "ask_user_question": self.tool_calls.get("AskUserQuestion", 0),
+            "ask_user_question": sum(self.tool_calls.get(t, 0) for t in QUESTION_TOOLS),
             "mcp_calls": sum(self.mcp.values()),
             "interrupts": self.interrupts,
             "queued_prompts": self.queued,
@@ -547,6 +607,7 @@ class Session:
             "bad_lines": self.bad_lines,
             "secret_like": self.secret_like,
             "pasted_images": self.pasted_images,
+            "messages_with_images": self.msgs_with_images,
             "words_short": self.words_short,
             "words_long": self.words_long,
             "pr_links": self.pr_links,
@@ -558,6 +619,9 @@ class Session:
             "feedback_batches_with_images": self.batches_with_images,
             "resumptions": self.resumptions,
             "resumption_asks": dict(self.resume_asks.most_common()),
+            "frustration_msgs": self.frustration,
+            "frustration_after": dict(self.frustration_after.most_common()),
+            "frustration_asks": dict(self.frustration_asks.most_common()),
             "models": dict(self.models.most_common(5)),
             "permission_modes": dict(self.permission_modes.most_common(5)),
             "agent_behaviors": {
@@ -657,6 +721,37 @@ def mcp_summary(c):
             "drafts": kinds["drafts"], "sends": kinds["sends"], "top_tools": dict(c.most_common(5))}
 
 
+def programmatic_projects(rows):
+    by_project = defaultdict(list)
+    for r in rows:
+        by_project[r.get("project")].append(r)
+    flagged = set()
+    for project, rs in by_project.items():
+        if len(rs) < PROGRAMMATIC_MIN_SESSIONS:
+            continue
+        one_shot = 0
+        for r in rs:
+            ep = str(r.get("entrypoint") or "")
+            shape = r.get("user_turns", 0) <= 1 and r.get("tool_calls", 0) == 0 and r.get("subagent_tool_calls", 0) == 0 and r.get("assistant_turns", 0) <= 2
+            one_shot += 1 if shape or (r.get("user_turns", 0) <= 1 and ep.startswith(PROGRAMMATIC_ENTRYPOINTS)) else 0
+        if one_shot / len(rs) >= PROGRAMMATIC_SHARE:
+            flagged.add(project)
+    return flagged
+
+
+def local_tz_name():
+    try:
+        key = getattr(datetime.now().astimezone().tzinfo, "key", None)
+        if key:
+            return key
+        link = os.path.realpath("/etc/localtime")
+        if "zoneinfo/" in link:
+            return link.split("zoneinfo/", 1)[1]
+    except Exception:
+        pass
+    return "UTC"
+
+
 def aggregate(sessions, tz, weeks):
     agg = {
         "sessions": len(sessions),
@@ -664,9 +759,11 @@ def aggregate(sessions, tz, weeks):
         "subagent_tool_calls": 0, "interrupts": 0, "queued_prompts": 0, "mid_run_steering": 0,
         "sessions_with_parallel_dispatch": 0, "parallel_dispatch_msgs": 0, "skipped_user_events": 0,
         "bad_lines": 0, "secret_like": 0, "pasted_images": 0, "words_short": 0, "words_long": 0, "pr_links": 0,
+        "messages_with_images": 0, "frustration_msgs": 0,
     }
     per_harness, models, perms, asks = Counter(), Counter(), Counter(), Counter()
     asks_all, resume_asks, batch_bullets = Counter(), Counter(), []
+    frustration_after, frustration_asks = Counter(), Counter()
     resumptions = batches_with_images = 0
     longest_gap = 0.0
     tools, sub_tools, mcp, skills, agent_types = Counter(), Counter(), Counter(), Counter(), Counter()
@@ -684,7 +781,7 @@ def aggregate(sessions, tz, weeks):
         for k in ("user_turns", "assistant_turns", "tool_calls", "subagent_files", "subagent_tool_calls",
                   "interrupts", "queued_prompts", "mid_run_steering", "parallel_dispatch_msgs",
                   "skipped_user_events", "bad_lines", "secret_like", "pasted_images", "words_short",
-                  "words_long", "pr_links"):
+                  "words_long", "pr_links", "messages_with_images", "frustration_msgs"):
             agg[k] += r[k]
         per_harness[s.harness] += 1
         models.update(s.models)
@@ -692,6 +789,8 @@ def aggregate(sessions, tz, weeks):
         asks.update(s.asks)
         asks_all.update(s.asks_all)
         resume_asks.update(s.resume_asks)
+        frustration_after.update(s.frustration_after)
+        frustration_asks.update(s.frustration_asks)
         resumptions += s.resumptions
         batch_bullets.extend(s.batch_bullets)
         batches_with_images += s.batches_with_images
@@ -737,6 +836,8 @@ def aggregate(sessions, tz, weeks):
         "asks_all": dict(asks_all.most_common()),
         "resumptions": resumptions,
         "resumption_asks": dict(resume_asks.most_common()),
+        "frustration_after": dict(frustration_after.most_common()),
+        "frustration_asks": dict(frustration_asks.most_common()),
         "feedback_batches": len(batch_bullets),
         "feedback_batch_bullets": {"median": pct(batch_bullets, 50), "max": max(batch_bullets, default=0)},
         "feedback_batches_with_images": batches_with_images,
@@ -762,14 +863,14 @@ def aggregate(sessions, tz, weeks):
         "bash_process_probes": sum(n for h, n in bash.items() if h in PROBE_HEADS),
         "skills": dict(skills.most_common()),
         "agent": {
-            "dispatches": tools.get("Agent", 0),
+            "dispatches": sum(tools.get(t, 0) for t in DISPATCH_TOOLS),
             "parallel_dispatch_msgs": agg["parallel_dispatch_msgs"],
             "sessions_with_parallel_dispatch": agg["sessions_with_parallel_dispatch"],
             "max_fanout": max((s.row()["max_fanout"] for s in sessions), default=0),
             "subagent_types": dict(agent_types.most_common()),
         },
         "artifact_actions": dict(artifact.most_common()),
-        "ask_user_question": tools.get("AskUserQuestion", 0),
+        "ask_user_question": sum(tools.get(t, 0) for t in QUESTION_TOOLS),
         "edits_by_ext": {t: dict(c.most_common()) for t, c in edits.items()},
         "bash_top25": dict(bash.most_common(25)),
         "feedback_messages": dict(feedback.most_common()),
@@ -809,6 +910,12 @@ def counter_table(d, k1, k2="count", limit=None):
 
 def render_report(agg, rows, scope, tz_name, parity=None):
     parity = parity or {}
+    prog = scope.get("programmatic") or {}
+    if prog.get("sessions"):
+        prog_str = f"{prog['sessions']} sessions, {prog['user_turns']} human turns, {prog['projects']} project(s); " + (
+            "kept in every count (--include-programmatic)" if prog.get("included") else "excluded from every count below; --include-programmatic keeps them")
+    else:
+        prog_str = "none detected"
     L = []
     L.append("# Agent session miner report\n")
     L.append(f"Generated {scope['generated_at']}. Timezone for hours: {tz_name}. Counts only, no message text.\n")
@@ -827,6 +934,7 @@ def render_report(agg, rows, scope, tz_name, parity=None):
         ("last session end", scope["last_end"]),
         ("malformed lines", agg["bad_lines"]),
         ("scan seconds", scope["scan_seconds"]),
+        ("programmatic sessions (one-shot runs in harness projects)", prog_str),
     ]))
     L.append("\n### Signals measured per harness\n")
     L.append(md_table(["signal"] + list(parity), [[sig] + [parity[h][sig] for h in parity] for sig in PARITY_SIGNALS]))
@@ -849,6 +957,7 @@ def render_report(agg, rows, scope, tz_name, parity=None):
         ("human messages under 15 words / over 100 words", f"{agg['words_short']} / {agg['words_long']} of {agg['user_turns']}"),
         ("longest gap between two human turns in one session (min)", agg["longest_gap_between_human_turns_min"]),
         ("pasted images (image blocks + [Image #n] markers in human text)", agg["pasted_images"]),
+        ("human messages with at least one pasted image", agg["messages_with_images"]),
         ("PR links recorded by the harness", agg["pr_links"]),
         ("secret-shaped or long identifier-like strings in human text (count only; check and rotate real ones)", agg["secret_like"]),
         ("permission modes seen", ", ".join(f"{k} ({v})" for k, v in agg["permission_modes"].items()) or "not recorded"),
@@ -887,7 +996,7 @@ def render_report(agg, rows, scope, tz_name, parity=None):
     a = agg["agent"]
     L.append("\n### Agent dispatches\n")
     L.append(md_table(["metric", "value"], [
-        ("Agent calls", a["dispatches"]),
+        ("dispatch calls (Agent, Task, spawn_agent)", a["dispatches"]),
         ("assistant messages with 2+ Agent calls (parallel)", a["parallel_dispatch_msgs"]),
         ("sessions with at least one parallel dispatch", a["sessions_with_parallel_dispatch"]),
         ("max fan-out in one message", a["max_fanout"]),
@@ -937,6 +1046,15 @@ def render_report(agg, rows, scope, tz_name, parity=None):
         ("bullets per batch, median / max", f"{agg['feedback_batch_bullets']['median']} / {agg['feedback_batch_bullets']['max']}"),
         ("batches with pasted images", agg["feedback_batches_with_images"]),
     ]))
+    L.append("\n### Frustration signals (human messages with an exasperation marker; upper bound, counts only)\n")
+    L.append(md_table(["metric", "value"], [
+        ("frustrated messages", agg["frustration_msgs"]),
+        ("share of human turns", f"{100 * agg['frustration_msgs'] / max(1, agg['user_turns']):.1f}%"),
+    ]))
+    L.append("\nWhat the assistant had just done before a frustrated message (a message can count under several):\n")
+    L.append(counter_table(agg["frustration_after"], "preceding signal", "messages"))
+    L.append("\nWhat the frustrated message asked for (primary category):\n")
+    L.append(counter_table(agg["frustration_asks"], "ask", "messages"))
     L.append("\n### Steering\n")
     L.append(md_table(["metric", "value"], [
         ("human turns arriving while assistant was mid tool run (heuristic)", agg["mid_run_steering"]),
@@ -1082,6 +1200,32 @@ def self_test():
     rep = render_report(agg, [r, r2], {"generated_at": "", "projects_dir": "", "session_files": 0, "skipped_files": 0,
                                        "since_days": None, "excludes": [], "first_start": None, "last_end": None, "scan_seconds": 0}, "UTC")
     assert "What I ask when I come back" in rep and "also matched" in rep and "Feedback batches" in rep
+    s3 = Session("t3", "p")
+    t3 = "2026-01-06T{}Z"
+    scan_lines([json.dumps(e) for e in [
+        {"type": "user", "timestamp": t3.format("09:00:00"), "message": {"content": "please fix it"}},
+        {"type": "assistant", "timestamp": t3.format("09:00:30"), "message": {"id": "c1", "content": [{"type": "tool_use", "id": "d1", "name": "spawn_agent", "input": {}}, {"type": "tool_use", "id": "d2", "name": "spawn_agent", "input": {}}]}},
+        {"type": "assistant", "timestamp": t3.format("09:01:00"), "message": {"id": "c2", "content": [{"type": "text", "text": "Done. All tests pass."}]}},
+        {"type": "user", "timestamp": t3.format("09:02:00"), "message": {"content": "wtf, this is still broken!!"}},
+        {"type": "assistant", "timestamp": t3.format("09:02:30"), "message": {"id": "c3", "content": [{"type": "tool_use", "id": "d3", "name": "request_user_input", "input": {}}, {"type": "text", "text": "Which option do you prefer?"}]}},
+        {"type": "user", "timestamp": t3.format("09:03:00"), "message": {"content": "1. yes\n2. no\n3. B"}},
+        {"type": "user", "timestamp": t3.format("09:04:00"), "message": {"content": [{"type": "text", "text": "see [Image #1]"}, {"type": "image"}]}},
+        {"type": "user", "timestamp": t3.format("09:05:00"), "message": {"content": "feedback:\n1. the header is too tall and the copy is wrong in three places, please rewrite it fully\n2. the footer links are dead and the colours are off\n3. the form loses state on refresh"}},
+    ]], s3, tz, False)
+    r3 = s3.row()
+    assert r3["agent_dispatches"] == 2 and r3["parallel_dispatch_msgs"] == 1 and r3["max_fanout"] == 2, r3
+    assert r3["frustration_msgs"] == 1 and r3["frustration_after"] == {"done_claim": 1}, r3
+    assert r3["ask_user_question"] == 1 and r3["agent_behaviors"]["structured_questions"] == 1 and r3["agent_behaviors"]["prose_questions"] == 0, r3["agent_behaviors"]
+    assert r3["numbered_answers"] == 1 and r3["messages_with_images"] == 1 and r3["feedback_batches"] == 2, r3
+    prog = [{"project": "evalproj", "user_turns": 1, "tool_calls": 0, "subagent_tool_calls": 0, "assistant_turns": 1, "entrypoint": "sdk-cli"} for _ in range(10)]
+    prog.append({"project": "evalproj", "user_turns": 8, "tool_calls": 20, "subagent_tool_calls": 0, "assistant_turns": 9, "entrypoint": "cli"})
+    normal = [{"project": "app", "user_turns": 1, "tool_calls": 0, "subagent_tool_calls": 0, "assistant_turns": 1, "entrypoint": "cli"} for _ in range(3)]
+    assert programmatic_projects(prog + normal) == {"evalproj"}
+    assert ZoneInfo(local_tz_name())
+    agg3 = aggregate([s3], tz, 1)
+    assert agg3["frustration_msgs"] == 1 and agg3["agent"]["dispatches"] == 2 and agg3["messages_with_images"] == 1, agg3["agent"]
+    rep3 = render_report(agg3, [r3], {"generated_at": "", "projects_dir": "", "session_files": 0, "skipped_files": 0, "since_days": None, "excludes": [], "first_start": None, "last_end": None, "scan_seconds": 0, "programmatic": {"projects": 1, "sessions": 10, "user_turns": 10, "tool_calls": 0, "included": False}}, "UTC")
+    assert "Frustration signals" in rep3 and "10 sessions, 10 human turns, 1 project(s); excluded" in rep3
     assert s.models == Counter({"claude-x": 1})
     print("self-test ok")
 
@@ -2152,7 +2296,8 @@ def main():
     ap.add_argument("--since-days", type=int, default=None, help="only files modified in the last N days")
     ap.add_argument("--out", default=".", help="output directory")
     ap.add_argument("--exclude", action="append", default=[], help="skip files whose path contains this (repeatable)")
-    ap.add_argument("--tz", default="Europe/Lisbon")
+    ap.add_argument("--tz", default=None, help="IANA zone for hours of day; defaults to this machine's zone")
+    ap.add_argument("--include-programmatic", action="store_true", help="keep one-shot harness sessions in the counts")
     ap.add_argument("--weeks", type=int, default=12)
     ap.add_argument("--notes", default=None, help="markdown file appended verbatim to the report")
     ap.add_argument("--self-test", action="store_true")
@@ -2176,7 +2321,8 @@ def main():
     if args.discover:
         discover_stores()
         return
-    tz = ZoneInfo(args.tz)
+    tz_name = args.tz or local_tz_name()
+    tz = ZoneInfo(tz_name)
     t0 = time.time()
     found, skipped = discover(args.projects_dir, args.since_days, args.exclude)
     sessions = []
@@ -2214,6 +2360,15 @@ def main():
     sessions.extend(other)
     sessions = [s for s in sessions if s.start]
     sessions.sort(key=lambda s: s.start)
+    prog_projects = programmatic_projects([s.row() for s in sessions])
+    prog_sessions = [s for s in sessions if s.project in prog_projects]
+    programmatic = {"projects": len(prog_projects), "sessions": len(prog_sessions),
+                    "user_turns": sum(s.user_turns for s in prog_sessions),
+                    "tool_calls": sum(sum(s.tool_calls.values()) for s in prog_sessions),
+                    "included": bool(args.include_programmatic)}
+    if prog_sessions and not args.include_programmatic:
+        sessions = [s for s in sessions if s.project not in prog_projects]
+        print(f"[programmatic] {len(prog_sessions)} one-shot sessions in {len(prog_projects)} harness project(s) excluded; --include-programmatic keeps them", file=sys.stderr)
     rows = [s.row() for s in sessions]
     agg = aggregate(sessions, tz, args.weeks)
     scope = {
@@ -2230,6 +2385,8 @@ def main():
         "first_start": rows[0]["start"] if rows else None,
         "last_end": max((r["end"] for r in rows if r["end"]), default=None),
         "scan_seconds": round(time.time() - t0, 1),
+        "programmatic": programmatic,
+        "tz": tz_name,
     }
     parity = harness_parity(stores_present(args.projects_dir))
     others = ("pi", "droid", "gemini-cli", "amp", "copilot-cli", "goose", "hermes")
@@ -2239,7 +2396,7 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     with open(os.path.join(args.out, "session_miner_output.json"), "w") as fh:
         json.dump({"scope": scope, "aggregates": agg, "sessions": rows, "harness_parity": parity}, fh, indent=1, default=str)
-    report = render_report(agg, rows, scope, args.tz, parity)
+    report = render_report(agg, rows, scope, tz_name, parity)
     if args.notes and os.path.isfile(args.notes):
         with open(args.notes) as fh:
             report += "\n" + fh.read()
