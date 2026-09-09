@@ -34,14 +34,26 @@ Heuristics with known ceilings:
     gap capped at 15 minutes, so idle hours do not count as work.
   * feedback regexes are case-insensitive substring/word matches; a
     message counts once per category and once per marker it matches.
+  * agent_behaviors: assistant-side regex signals (done claims, done then probe, prose vs structured questions, blocked on user, retractions, options offered, long replies, retries after an error result, runs between human turns), reported under "Agent behaviors (assistant messages)".
+  * asks: primary label is the first ASK_RE match, asks_all counts every
+    match; categories added for unblock or manual step, locate deliverable,
+    trust check, steer mid-run, show me, conciseness; per-turn shape
+    features are bullet count (feedback batch at 3+ bullets, with or
+    without images) and resumption (30+ min after the previous human turn).
 
 Usage:
     python3 session_miner.py --out DIR [--projects-dir P] [--since-days N]
                              [--exclude ID ...] [--tz Europe/Lisbon]
                              [--weeks 12] [--notes FILE] [--self-test]
+                             [--discover] [--user-turns ID] [--no-codex]
+                             [--no-cursor] [--no-opencode] [--no-other]
 
 Writes DIR/session_miner_output.json and DIR/session_miner_report.md.
---since-days filters files by mtime. --exclude drops any file whose path
+The report's "Signals measured per harness" table (JSON key harness_parity) says
+which signal each adapter really extracts: measured, partial, not measured, or
+store absent on this machine.
+--since-days filters files by mtime (Cursor and OpenCode by last update), so a
+long-lived session can start before the window. --exclude drops any file whose path
 contains the given string (session id, project dir, ...). --notes appends a
 markdown file verbatim to the end of the report.
 """
@@ -70,12 +82,18 @@ SKIP_PREFIXES = (
 )
 IMAGE_RE = re.compile(r"\[Image #\d+\]")
 ASK_RE = [
-    ("status or steering", re.compile(r"\b(progress|status|what'?s missing|where are we|did we|have you|are you sure|what do you need|continue|go on|stop|wait)\b", re.I)),
+    ("steer mid-run", re.compile(r"\A\s*(wait|stop|hold on|pause|don'?t)\b|\b(hold on|before you|first do)\b", re.I)),
+    ("trust check", re.compile(r"\b((how )?did you (actually|really|test|run|try|check|verify)|are you sure|is it really|did we|verify that|does ?n'?t work|does not work|still broken|not working)\b", re.I)),
+    ("show me", re.compile(r"\b(show me|screenshots?|preview|let me see|mockups?)\b", re.I)),
+    ("locate deliverable", re.compile(r"\b(where is|where'?s|what('s| is) the (link|url)|give me the (url|link)|open it|where did you put|which file)\b", re.I)),
+    ("unblock or manual step", re.compile(r"\b(done on my (side|end)|I (just )?did (it|that|this)|I (created|set ?up|installed|enabled|configured)|pasted|logged in|(I |we )?(approved|merged) (it|the|them)|unlocked|added the (key|token|secret)|here('s| is) the (token|key|url|link)|registered)\b", re.I)),
+    ("status or steering", re.compile(r"\b(progress|status|what('s| is| are we) missing|state of (our|the) work|where are we|have you|what do you need|continue|go on)\b", re.I)),
     ("approve or hand back", re.compile(r"^\s*(yes|ok|okay|go ahead|approved|lgtm|proceed|merged|deployed|done)\b", re.I)),
     ("answer questions", re.compile(r"(?m)^\s*(Q\d+|[A-D]\d*|\d+)\s*[:.)-]", re.I)),
-    ("feedback or correction", re.compile(r"\b(no,|not what|wrong|instead|should have|I do not want|I don't want|remove|too long|concise|again|fix this|does not work|doesn't work|not great|not good)\b", re.I)),
+    ("conciseness", re.compile(r"\b(concise|shorter|too long|tl;?dr|less text)\b", re.I)),
+    ("feedback or correction", re.compile(r"\b(no,|not what|wrong|instead|should have|I do not want|I don't want|remove|again|fix this|not great|not good)\b", re.I)),
     ("implement or fix", re.compile(r"\b(implement|build|add|create|fix|refactor|migrate|update the code|write the code|make it work|feature|bug|failing)\b", re.I)),
-    ("review or verify", re.compile(r"\b(review|verify|test it|check (the|that|if)|validate|audit|qa\b|screenshots?)", re.I)),
+    ("review or verify", re.compile(r"\b(review|verify|test it|check (the|that|if)|validate|audit|qa\b)", re.I)),
     ("plan or design", re.compile(r"\b(plan|design|brainstorm|architecture|spec|approach|options|tradeoffs?|grill)\b", re.I)),
     ("research or explain", re.compile(r"\b(research|investigate|explain|why (is|does|did)|how (does|do|is)|compare|find out|look into|what is)\b", re.I)),
     ("docs or writing", re.compile(r"\b(doc|document|write up|write a|readme|notion page|article|summary|brief|report)\b", re.I)),
@@ -86,16 +104,29 @@ ASK_RE = [
 ]
 
 
+def classify_asks(text):
+    return [label for label, rx in ASK_RE if rx.search(text)] or ["other"]
+
+
 def classify_ask(text):
-    for label, rx in ASK_RE:
-        if rx.search(text):
-            return label
-    return "other"
+    return classify_asks(text)[0]
+
+
+BULLET_RE = re.compile(r"(?m)^\s*(?:[-*•]|\d+[.)])\s+\S")
+BATCH_MIN_BULLETS = 3
+RESUME_GAP_S = 1800
 CODEX_AMBIENT_RE = re.compile(r"<(in-app-browser-context|environment_context|permissions_instructions|skills_instructions|user_instructions)[^>]*>.*?</\1>", re.S)
 CODEX_REQUEST_RE = re.compile(r"## My request for Codex:\s*(.*)", re.S)
 INTERRUPT_PREFIX = "[Request interrupted"
 TYPE_RE = re.compile(r'"type"\s*:\s*"(user|assistant|pr-link)"')
 MCP_RE = re.compile(r"^mcp__(.+?)__(.+)$")
+MCP_READ_RE = re.compile(r"(^|[_\-])(get|list|search|read|fetch|query|describe|find|check)", re.I)
+MCP_WRITE_RE = re.compile(r"(^|[_\-])(create|update|delete|send|post|save|set|add|move|publish|reply|upload|write|execute|run|deploy|archive|share|mutate|remove|forward|trash|label|mark|merge|submit|start|stop|restart|reset)", re.I)
+MCP_DRAFT_RE = re.compile(r"draft", re.I)
+MCP_SEND_RE = re.compile(r"(^|[_\-])(send|post|reply|forward)($|[_\-])", re.I)
+TRACKING_TOOLS = ("TaskCreate", "TaskUpdate", "TaskList", "ScheduleWakeup", "Monitor", "PushNotification", "AskUserQuestion",
+                  "SendUserFile", "Artifact", "Agent", "SendMessage", "Skill")
+PROBE_HEADS = {"lsof", "curl", "ps", "pgrep", "netstat", "nc", "wget", "ping", "kill", "pkill", "sleep", "until"}
 ENV_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 SEGMENT_RE = re.compile(r"^(?:[^\n;&|]|&(?!&)|\|(?!\|))*?(?:&&|\|\||;|\n)\s*")
 SETUP_HEADS = {"cd", "export", "set", "source", ".", "nvm", "unset", "ulimit", "pushd"}
@@ -110,7 +141,7 @@ FEEDBACK = {
         r"\bagain\b", r"\byou should\b", r"\bbe more concise\b", r"\btoo long\b", r"\bremove\b",
     ],
     "status_asks": [r"\bprogress\b", r"\bstatus\b", r"\bwhere are we\b", r"\bdid we\b", r"\bhave you\b"],
-    "approvals": [r"\byes\b", r"\bok\b", r"\bgo ahead\b", r"\bapproved\b", r"\blgtm\b", r"\bproceed\b"],
+    "approvals": [r"^\s*(yes|ok|okay)\b", r"\bgo ahead\b", r"\bapproved\b", r"\blgtm\b", r"\bproceed\b"],
     "visual_requests": [
         r"\bartifact", r"\bscreenshot", r"\bmockup", r"\bdiagram", r"\bprototype",
         r"\bcollapsible\b", r"\bdashboard",
@@ -119,6 +150,21 @@ FEEDBACK = {
 FEEDBACK_RE = {
     cat: [(p, re.compile(p, re.IGNORECASE)) for p in pats] for cat, pats in FEEDBACK.items()
 }
+AGENT_RE = {
+    "done_claims": re.compile(r"\b(done|fixed|implemented|complete|completed|all tests pass|merged|deployed|shipped|works now)\b", re.I),
+    "probe": re.compile(r"\b(did you actually|are you sure|did we|is it really|verify|check that|doesn'?t work|does not work|not working|still (broken|failing|not|wrong))\b", re.I),
+    "prose_questions": re.compile(r"\b(should I|do you want|which|would you like|do you prefer|can you|could you|let me know)\b", re.I),
+    "blocked_on_user": re.compile(r"\b(you need to|I need you to|please (run|provide|paste|approve)|manually|from your side|on your end|I can'?t do this without|requires your)\b", re.I),
+    "retractions": re.compile(r"\b(you'?re right|you are right|I was wrong|my mistake|apologies|I apologize|I misread|I misunderstood)\b", re.I),
+}
+OPTION_LINE_RE = re.compile(r"(?mi)^\W{0,6}(option|approach)\b")
+LETTER_LINE_RE = re.compile(r"(?m)^\W{0,4}[A-D]\)")
+NUMBERED_LINE_RE = re.compile(r"(?m)^\W{0,4}([12])\.")
+ALTERNATIVE_RE = re.compile(r"\b(options?|approach(es)?|alternatives?|recommend)\b", re.I)
+LONG_REPLY_CHARS = 2500
+LONG_RUN_S = 120
+AGENT_KEYS = ("assistant_text_msgs", "done_claims", "done_claim_then_probe", "prose_questions", "structured_questions",
+              "blocked_on_user", "retractions", "options_offered", "long_replies", "retries_after_error", "tool_results")
 
 
 def parse_ts(s):
@@ -203,6 +249,7 @@ class Session:
         self.bad_lines = 0
         self.last_assistant_block = None
         self.harness = "claude-code"
+        self.parent = None
         self.originator = None
         self.models = Counter()
         self.permission_modes = Counter()
@@ -213,6 +260,86 @@ class Session:
         self.pr_links = 0
         self.longest_gap_s = 0.0
         self.asks = Counter()
+        self.asks_all = Counter()
+        self.batch_bullets = []
+        self.batches_with_images = 0
+        self.resumptions = 0
+        self.resume_asks = Counter()
+        self.agent_sig = Counter()
+        self.asst_lens = []
+        self.cur_msg_id = None
+        self.cur_text = []
+        self.cur_tools = []
+        self.pending_done = False
+        self.tool_ids = {}
+        self.error_tools = set()
+        self.run_open = False
+        self.run_tools = 0
+        self.run_active_s = 0.0
+        self.run_prev_ts = None
+        self.runs_tools = []
+        self.runs_s = []
+
+    def run_touch(self, ts):
+        self.run_open = True
+        if ts is None:
+            return
+        if self.run_prev_ts is not None and ts > self.run_prev_ts:
+            self.run_active_s += min((ts - self.run_prev_ts).total_seconds(), ACTIVE_GAP_CAP_S)
+        self.run_prev_ts = ts
+
+    def close_run(self, ts):
+        if self.run_open:
+            self.runs_tools.append(self.run_tools)
+            self.runs_s.append(self.run_active_s)
+        self.run_open = False
+        self.run_tools = 0
+        self.run_active_s = 0.0
+        self.run_prev_ts = ts
+
+    def run_stats(self):
+        tools = self.runs_tools + ([self.run_tools] if self.run_open else [])
+        secs = self.runs_s + ([self.run_active_s] if self.run_open else [])
+        return tools, secs
+
+    def tool_issued(self, name):
+        self.run_open = True
+        self.run_tools += 1
+        if name in self.error_tools:
+            self.agent_sig["retries_after_error"] += 1
+        self.error_tools.clear()
+
+    def tool_result(self, name, is_error):
+        self.agent_sig["tool_results"] += 1
+        if is_error and name:
+            self.error_tools.add(name)
+
+    def assistant_text(self, text, tools):
+        if "AskUserQuestion" in tools:
+            self.agent_sig["structured_questions"] += 1
+        text = text.strip() if isinstance(text, str) else ""
+        if not text:
+            return
+        self.agent_sig["assistant_text_msgs"] += 1
+        self.asst_lens.append(len(text))
+        if len(text) > LONG_REPLY_CHARS:
+            self.agent_sig["long_replies"] += 1
+        if AGENT_RE["done_claims"].search(text[:200]):
+            self.agent_sig["done_claims"] += 1
+            self.pending_done = True
+        if "?" in text and "AskUserQuestion" not in tools and AGENT_RE["prose_questions"].search(text):
+            self.agent_sig["prose_questions"] += 1
+        for k in ("blocked_on_user", "retractions"):
+            if AGENT_RE[k].search(text):
+                self.agent_sig[k] += 1
+        if len(OPTION_LINE_RE.findall(text)) >= 2 or len(LETTER_LINE_RE.findall(text)) >= 2 or (
+                {"1", "2"} <= set(NUMBERED_LINE_RE.findall(text)) and ALTERNATIVE_RE.search(text)):
+            self.agent_sig["options_offered"] += 1
+
+    def flush_msg(self):
+        if self.cur_msg_id is not None:
+            self.assistant_text("\n".join(self.cur_text), self.cur_tools)
+        self.cur_msg_id, self.cur_text, self.cur_tools = None, [], []
 
     def touch(self, ts):
         if ts is None:
@@ -232,6 +359,9 @@ class Session:
             self.sub_tool_calls[name] += 1
             return
         self.tool_calls[name] += 1
+        self.tool_issued(name)
+        if block.get("id"):
+            self.tool_ids[block["id"]] = name
         m = MCP_RE.match(name)
         if m:
             self.mcp[(m.group(1), m.group(2))] += 1
@@ -254,8 +384,15 @@ class Session:
         msg_id = msg.get("id") or ev.get("uuid") or "?"
         content = msg.get("content")
         if not sidechain:
+            if msg_id != self.cur_msg_id:
+                self.flush_msg()
+                self.cur_msg_id = msg_id
             self.assistant_msgs.add(msg_id)
-            self.touch(parse_ts(ev.get("timestamp")))
+            ts = parse_ts(ev.get("timestamp"))
+            self.touch(ts)
+            self.run_touch(ts)
+            if isinstance(msg.get("model"), str) and not msg["model"].startswith("<"):
+                self.models[msg["model"][:40]] += 1
         if not isinstance(content, list):
             return
         for block in content:
@@ -265,6 +402,10 @@ class Session:
                 self.on_tool_use(block, msg_id, sidechain)
             if not sidechain:
                 self.last_assistant_block = block.get("type")
+                if block.get("type") == "text":
+                    self.cur_text.append(str(block.get("text") or ""))
+                elif block.get("type") == "tool_use":
+                    self.cur_tools.append(block.get("name") or "")
 
     def on_user(self, ev, sidechain, tz):
         if sidechain:
@@ -272,8 +413,14 @@ class Session:
         ts = parse_ts(ev.get("timestamp"))
         self.touch(ts)
         msg = ev.get("message") if isinstance(ev.get("message"), dict) else {}
-        text = user_text(msg.get("content"))
+        content = msg.get("content")
+        if isinstance(content, list):
+            for b in content:
+                if isinstance(b, dict) and b.get("type") == "tool_result":
+                    self.tool_result(self.tool_ids.pop(b.get("tool_use_id"), None), bool(b.get("is_error")))
+        text = user_text(content)
         if text is None:
+            self.run_touch(ts)
             return
         origin = ev.get("origin") if isinstance(ev.get("origin"), dict) else {}
         stripped = text.lstrip()
@@ -283,12 +430,19 @@ class Session:
         if stripped.startswith(INTERRUPT_PREFIX):
             self.interrupts += 1
             return
+        images = 0
         if isinstance(msg.get("content"), list):
-            self.pasted_images += sum(1 for b in msg["content"] if isinstance(b, dict) and b.get("type") == "image")
-        self.human_turn(text, ts, tz, ev.get("promptSource") == "queued")
+            images = sum(1 for b in msg["content"] if isinstance(b, dict) and b.get("type") == "image")
+        self.human_turn(text, ts, tz, ev.get("promptSource") == "queued", images)
 
-    def human_turn(self, text, ts, tz, queued=False):
+    def human_turn(self, text, ts, tz, queued=False, images=0):
         """Account one human turn. Shared by every harness adapter."""
+        self.flush_msg()
+        self.close_run(ts)
+        self.error_tools.clear()
+        if self.pending_done and AGENT_RE["probe"].search(text):
+            self.agent_sig["done_claim_then_probe"] += 1
+        self.pending_done = False
         self.user_turns += 1
         self.msg_lens.append(len(text))
         words = len(text.split())
@@ -296,12 +450,23 @@ class Session:
             self.words_short += 1
         if words > 100:
             self.words_long += 1
-        self.pasted_images += len(IMAGE_RE.findall(text))
+        images += len(IMAGE_RE.findall(text))
+        self.pasted_images += images
         self.secret_like += len(SECRET_RE.findall(text))
-        self.asks[classify_ask(text)] += 1
+        labels = classify_asks(text)
+        self.asks[labels[0]] += 1
+        self.asks_all.update(labels)
+        bullets = len(BULLET_RE.findall(text))
+        if bullets >= BATCH_MIN_BULLETS:
+            self.batch_bullets.append(bullets)
+            self.batches_with_images += 1 if images else 0
         if ts is not None:
             if self.turn_ts and ts > self.turn_ts[-1]:
-                self.longest_gap_s = max(self.longest_gap_s, (ts - self.turn_ts[-1]).total_seconds())
+                gap = (ts - self.turn_ts[-1]).total_seconds()
+                self.longest_gap_s = max(self.longest_gap_s, gap)
+                if gap >= RESUME_GAP_S:
+                    self.resumptions += 1
+                    self.resume_asks[labels[0]] += 1
             self.turn_ts.append(ts)
             self.turn_hours[ts.astimezone(tz).hour] += 1
         if queued:
@@ -322,24 +487,30 @@ class Session:
     def assistant_turn(self, ts, msg_id, had_tool):
         self.assistant_msgs.add(msg_id)
         self.touch(ts)
+        self.run_touch(ts)
         self.last_assistant_block = "tool_use" if had_tool else "text"
 
     def tool(self, name, ts):
         name = str(name or "(unnamed)")[:60]
         self.tool_calls[name] += 1
         self.touch(ts)
+        self.run_touch(ts)
+        self.tool_issued(name)
         self.last_assistant_block = "tool_use"
         m = MCP_RE.match(name)
         if m:
             self.mcp[(m.group(1), m.group(2))] += 1
+        return name
 
     def gaps(self):
         ts = sorted(self.turn_ts)
         return [(b - a).total_seconds() for a, b in zip(ts, ts[1:])]
 
     def row(self):
+        self.flush_msg()
         dur = (self.end - self.start).total_seconds() / 60 if self.start and self.end else None
         gaps = self.gaps()
+        run_s = self.run_stats()[1]
         return {
             "session_id": self.session_id,
             "harness": self.harness,
@@ -381,8 +552,19 @@ class Session:
             "pr_links": self.pr_links,
             "longest_gap_min": round(self.longest_gap_s / 60, 1),
             "asks": dict(self.asks.most_common()),
+            "asks_all": dict(self.asks_all.most_common()),
+            "feedback_batches": len(self.batch_bullets),
+            "feedback_batch_bullets_max": max(self.batch_bullets, default=0),
+            "feedback_batches_with_images": self.batches_with_images,
+            "resumptions": self.resumptions,
+            "resumption_asks": dict(self.resume_asks.most_common()),
             "models": dict(self.models.most_common(5)),
             "permission_modes": dict(self.permission_modes.most_common(5)),
+            "agent_behaviors": {
+                **{k: self.agent_sig.get(k, 0) for k in AGENT_KEYS},
+                "run_count": len(run_s),
+                "long_runs_over_2min": sum(1 for x in run_s if x > LONG_RUN_S),
+            },
         }
 
 
@@ -455,6 +637,26 @@ def discover(projects_dir, since_days, excludes):
     return sessions, skipped
 
 
+def mcp_kind(tool):
+    if MCP_DRAFT_RE.search(tool):
+        return "drafts"
+    if MCP_SEND_RE.search(tool):
+        return "sends"
+    if MCP_WRITE_RE.search(tool):
+        return "writes"
+    if MCP_READ_RE.search(tool):
+        return "reads"
+    return "other"
+
+
+def mcp_summary(c):
+    kinds = Counter()
+    for tool, n in c.items():
+        kinds[mcp_kind(tool)] += n
+    return {"total": sum(c.values()), "reads": kinds["reads"], "writes": kinds["writes"] + kinds["drafts"] + kinds["sends"],
+            "drafts": kinds["drafts"], "sends": kinds["sends"], "top_tools": dict(c.most_common(5))}
+
+
 def aggregate(sessions, tz, weeks):
     agg = {
         "sessions": len(sessions),
@@ -464,11 +666,14 @@ def aggregate(sessions, tz, weeks):
         "bad_lines": 0, "secret_like": 0, "pasted_images": 0, "words_short": 0, "words_long": 0, "pr_links": 0,
     }
     per_harness, models, perms, asks = Counter(), Counter(), Counter(), Counter()
+    asks_all, resume_asks, batch_bullets = Counter(), Counter(), []
+    resumptions = batches_with_images = 0
     longest_gap = 0.0
     tools, sub_tools, mcp, skills, agent_types = Counter(), Counter(), Counter(), Counter(), Counter()
     artifact, bash, feedback, markers = Counter(), Counter(), Counter(), Counter()
     edits = defaultdict(Counter)
     lens, gaps, durations, actives = [], [], [], []
+    agent_sig, agent_by_harness, asst_lens, run_tools, run_s = Counter(), defaultdict(Counter), [], [], []
     hours_start, hours_turns, weekly, per_project, per_entry = Counter(), Counter(), Counter(), Counter(), Counter()
     dead_starts = 0
     now = datetime.now(timezone.utc).astimezone(tz)
@@ -485,6 +690,11 @@ def aggregate(sessions, tz, weeks):
         models.update(s.models)
         perms.update(s.permission_modes)
         asks.update(s.asks)
+        asks_all.update(s.asks_all)
+        resume_asks.update(s.resume_asks)
+        resumptions += s.resumptions
+        batch_bullets.extend(s.batch_bullets)
+        batches_with_images += s.batches_with_images
         longest_gap = max(longest_gap, s.longest_gap_s)
         agg["sessions_with_parallel_dispatch"] += 1 if r["parallel_dispatch_msgs"] else 0
         tools.update(s.tool_calls)
@@ -500,6 +710,12 @@ def aggregate(sessions, tz, weeks):
             edits[tool].update(c)
         lens.extend(s.msg_lens)
         gaps.extend(s.gaps())
+        agent_sig.update(r["agent_behaviors"])
+        agent_by_harness[s.harness].update({k: r["agent_behaviors"][k] for k in ("assistant_text_msgs", "tool_results")})
+        asst_lens.extend(s.asst_lens)
+        rt, rs = s.run_stats()
+        run_tools.extend(rt)
+        run_s.extend(rs)
         hours_turns.update(s.turn_hours)
         per_project[s.project] += 1
         per_entry[r["entrypoint"] or "(unknown)"] += 1
@@ -518,6 +734,12 @@ def aggregate(sessions, tz, weeks):
     agg.update({
         "sessions_by_harness": dict(per_harness.most_common()),
         "asks": dict(asks.most_common()),
+        "asks_all": dict(asks_all.most_common()),
+        "resumptions": resumptions,
+        "resumption_asks": dict(resume_asks.most_common()),
+        "feedback_batches": len(batch_bullets),
+        "feedback_batch_bullets": {"median": pct(batch_bullets, 50), "max": max(batch_bullets, default=0)},
+        "feedback_batches_with_images": batches_with_images,
         "models": dict(models.most_common(10)),
         "permission_modes": dict(perms.most_common()),
         "longest_gap_between_human_turns_min": round(longest_gap / 60, 1),
@@ -533,9 +755,11 @@ def aggregate(sessions, tz, weeks):
         "tools": dict(tools.most_common()),
         "subagent_tools": dict(sub_tools.most_common()),
         "mcp_servers": {
-            srv: {"total": sum(c.values()), "top_tools": dict(c.most_common(5))}
+            srv: mcp_summary(c)
             for srv, c in sorted(mcp_servers.items(), key=lambda kv: -sum(kv[1].values()))
         },
+        "tracking_tools": {t: tools.get(t, 0) for t in TRACKING_TOOLS},
+        "bash_process_probes": sum(n for h, n in bash.items() if h in PROBE_HEADS),
         "skills": dict(skills.most_common()),
         "agent": {
             "dispatches": tools.get("Agent", 0),
@@ -552,6 +776,18 @@ def aggregate(sessions, tz, weeks):
         "feedback_markers": {f"{cat}: {pat}": n for (cat, pat), n in markers.most_common()},
         "user_msg_chars": {"count": len(lens), "median": pct(lens, 50), "p90": pct(lens, 90)},
         "turn_gap_seconds": {"count": len(gaps), "median": pct(gaps, 50), "p90": pct(gaps, 90)},
+        "agent_behaviors": {
+            **{k: agent_sig.get(k, 0) for k in AGENT_KEYS + ("long_runs_over_2min",)},
+            "assistant_msg_chars": {"count": len(asst_lens), "median": pct(asst_lens, 50), "p90": pct(asst_lens, 90)},
+            "runs": {
+                "count": len(run_s),
+                "tool_calls_median": pct(run_tools, 50), "tool_calls_p90": pct(run_tools, 90),
+                "minutes_median": round(pct(run_s, 50) / 60, 1) if run_s else None,
+                "minutes_p90": round(pct(run_s, 90) / 60, 1) if run_s else None,
+            },
+            "by_harness": {h: {"assistant_text_msgs": c.get("assistant_text_msgs", 0), "tool_results": c.get("tool_results", 0)}
+                           for h, c in sorted(agent_by_harness.items())},
+        },
         "weekly_sessions": {ws.date().isoformat(): weekly.get(ws.date().isoformat(), 0) for ws in week_starts},
         "sessions_by_hour": {h: hours_start.get(h, 0) for h in range(24)},
         "user_turns_by_hour": {h: hours_turns.get(h, 0) for h in range(24)},
@@ -571,7 +807,8 @@ def counter_table(d, k1, k2="count", limit=None):
     return md_table([k1, k2], items)
 
 
-def render_report(agg, rows, scope, tz_name):
+def render_report(agg, rows, scope, tz_name, parity=None):
+    parity = parity or {}
     L = []
     L.append("# Agent session miner report\n")
     L.append(f"Generated {scope['generated_at']}. Timezone for hours: {tz_name}. Counts only, no message text.\n")
@@ -591,6 +828,11 @@ def render_report(agg, rows, scope, tz_name):
         ("malformed lines", agg["bad_lines"]),
         ("scan seconds", scope["scan_seconds"]),
     ]))
+    L.append("\n### Signals measured per harness\n")
+    L.append(md_table(["signal"] + list(parity), [[sig] + [parity[h][sig] for h in parity] for sig in PARITY_SIGNALS]))
+    empty = [h for h in parity if parity[h]["human turns"] not in (STORE_ABSENT, SKIPPED_BY_FLAG) and not any(k.startswith(h) for k in agg["sessions_by_harness"])]
+    L.append("\nmid-run steering is a heuristic on every harness: a human turn that lands after a tool call with no assistant text in between."
+             + (f" Store present but no sessions in range, so the cells describe the adapter: {', '.join(empty)}." if empty else ""))
     L.append("\n## Session inventory\n")
     L.append(md_table(["metric", "value"], [
         ("sessions", agg["sessions"]),
@@ -610,10 +852,13 @@ def render_report(agg, rows, scope, tz_name):
         ("PR links recorded by the harness", agg["pr_links"]),
         ("secret-shaped or long identifier-like strings in human text (count only; check and rotate real ones)", agg["secret_like"]),
         ("permission modes seen", ", ".join(f"{k} ({v})" for k, v in agg["permission_modes"].items()) or "not recorded"),
-        ("models seen (Codex threads record these)", ", ".join(f"{k} ({v})" for k, v in agg["models"].items()) or "not recorded"),
+        ("models seen (see the parity table for which harnesses record them)", ", ".join(f"{k} ({v})" for k, v in agg["models"].items()) or "not recorded"),
     ]))
-    L.append("\n### What the human turns ask for (first matching category, counts only)\n")
-    L.append(counter_table(agg["asks"], "ask", "human turns"))
+    L.append("\n### What the human turns ask for (primary = first matching category; also matched = further categories the same turn hit; counts only)\n")
+    L.append(md_table(["ask", "human turns (primary)", "also matched"], [
+        (k, agg["asks"].get(k, 0), agg["asks_all"].get(k, 0) - agg["asks"].get(k, 0))
+        for k in sorted(agg["asks_all"], key=lambda k: (-agg["asks"].get(k, 0), -agg["asks_all"][k]))
+    ]))
     L.append("\n### Sessions by harness\n")
     L.append(counter_table(agg["sessions_by_harness"], "harness", "sessions"))
     L.append("\n### Sessions by project\n")
@@ -627,13 +872,16 @@ def render_report(agg, rows, scope, tz_name):
     L.append("\n## Tool usage\n")
     L.append("### Main thread, top 25\n")
     L.append(counter_table(agg["tools"], "tool", limit=25))
+    L.append("\n### Tracking and hand-off tools (Claude Code tool names, 0 means not seen)\n")
+    L.append(counter_table(agg["tracking_tools"], "tool"))
     L.append("\n### Subagents, top 15\n")
     L.append(counter_table(agg["subagent_tools"], "tool", limit=15))
     L.append("\n### MCP servers\n")
-    L.append(md_table(["server", "calls", "top tools"], [
-        (srv, d["total"], ", ".join(f"{t} ({n})" for t, n in d["top_tools"].items()))
+    L.append(md_table(["server", "calls", "reads", "writes", "drafts", "sends", "top tools"], [
+        (srv, d["total"], d["reads"], d["writes"], d["drafts"], d["sends"], ", ".join(f"{t} ({n})" for t, n in d["top_tools"].items()))
         for srv, d in agg["mcp_servers"].items()
     ]))
+    L.append("\nreads and writes are classified by the verb in the tool name; drafts and sends are the subset of writes whose name says draft, or send, post, reply, forward.\n")
     L.append("\n### Skill invocations\n")
     L.append(counter_table(agg["skills"], "skill"))
     a = agg["agent"]
@@ -655,18 +903,50 @@ def render_report(agg, rows, scope, tz_name):
         L.append(counter_table(d, "ext"))
     L.append("\n### Bash commands by leading word, top 25\n")
     L.append(counter_table(agg["bash_top25"], "command"))
+    L.append(f"\nprocess probes and waits ({', '.join(sorted(PROBE_HEADS))}): {agg['bash_process_probes']}\n")
+    ab = agg["agent_behaviors"]
+    L.append("\n## Agent behaviors (assistant messages)\n")
+    L.append(md_table(["signal", "count"], [
+        ("assistant messages with text", ab["assistant_text_msgs"]),
+        ("done claims (completion word in the first 200 chars)", ab["done_claims"]),
+        ("done claims followed by a human trust probe (done is not done)", ab["done_claim_then_probe"]),
+        ("prose questions without AskUserQuestion", ab["prose_questions"]),
+        ("structured questions (AskUserQuestion in the message)", ab["structured_questions"]),
+        ("blocked on user (asks the human to do a step)", ab["blocked_on_user"]),
+        ("retractions", ab["retractions"]),
+        ("options offered (2+ alternatives in one message)", ab["options_offered"]),
+        (f"long replies (over {LONG_REPLY_CHARS} chars)", ab["long_replies"]),
+        ("assistant text chars: median / p90", f"{ab['assistant_msg_chars']['median']} / {ab['assistant_msg_chars']['p90']}"),
+        ("retries after an error result (same tool, next call)", ab["retries_after_error"]),
+        ("runs (assistant activity between two human turns)", ab["runs"]["count"]),
+        ("tool calls per run: median / p90", f"{ab['runs']['tool_calls_median']} / {ab['runs']['tool_calls_p90']}"),
+        (f"active minutes per run (gaps capped at {ACTIVE_GAP_CAP_S // 60} min): median / p90", f"{ab['runs']['minutes_median']} / {ab['runs']['minutes_p90']}"),
+        (f"runs over {LONG_RUN_S // 60} active minutes", ab["long_runs_over_2min"]),
+    ]))
+    L.append("\nPer harness: " + "; ".join(
+        f"{h}: text signals {'measured' if c['assistant_text_msgs'] else 'not measured'}, retries {'measured' if c['tool_results'] else 'not measured'}"
+        for h, c in ab["by_harness"].items()) + "\n")
     L.append("\n## Feedback signals (human messages)\n")
     L.append("Messages matching at least one marker per category:\n")
     L.append(counter_table(agg["feedback_messages"], "category", "messages"))
     L.append("\nPer marker (total matches):\n")
     L.append(counter_table(agg["feedback_markers"], "marker", "matches"))
+    L.append(f"\nFeedback batches (human turns with {BATCH_MIN_BULLETS}+ bullet or numbered lines):\n")
+    L.append(md_table(["metric", "value"], [
+        ("feedback batches", agg["feedback_batches"]),
+        ("bullets per batch, median / max", f"{agg['feedback_batch_bullets']['median']} / {agg['feedback_batch_bullets']['max']}"),
+        ("batches with pasted images", agg["feedback_batches_with_images"]),
+    ]))
     L.append("\n### Steering\n")
     L.append(md_table(["metric", "value"], [
         ("human turns arriving while assistant was mid tool run (heuristic)", agg["mid_run_steering"]),
         ("prompts with promptSource=queued (harness marker)", agg["queued_prompts"]),
         ("interrupts", agg["interrupts"]),
         ("share of human turns that were mid-run", f"{100 * agg['mid_run_steering'] / max(1, agg['user_turns']):.1f}%"),
+        (f"resumptions (human turn {RESUME_GAP_S // 60}+ min after the previous one in the same session)", agg["resumptions"]),
     ]))
+    L.append("\nWhat I ask when I come back (primary category of resumption turns):\n")
+    L.append(counter_table(agg["resumption_asks"], "ask", "resumption turns"))
     L.append("\n## Message length and cadence\n")
     L.append(md_table(["metric", "value"], [
         ("human messages", agg["user_msg_chars"]["count"]),
@@ -691,7 +971,7 @@ def self_test():
     ts = "2026-01-05T10:00:{:02d}Z"
     events = [
         {"type": "user", "timestamp": ts.format(0), "message": {"content": "Q1: yes go ahead"}, "origin": {"kind": "human"}},
-        {"type": "assistant", "timestamp": ts.format(1), "message": {"id": "m1", "content": [
+        {"type": "assistant", "timestamp": ts.format(1), "message": {"id": "m1", "model": "claude-x", "content": [
             {"type": "tool_use", "name": "Agent", "input": {"subagent_type": "Explore"}},
             {"type": "tool_use", "name": "Agent", "input": {}},
             {"type": "tool_use", "name": "Bash", "input": {"command": "cd /x && FOO=1 git status"}},
@@ -726,6 +1006,83 @@ def self_test():
     assert s.mcp == Counter({("slack", "send"): 1}) and s.skills == Counter({"grilling": 1})
     assert s.artifact_actions == Counter({"publish": 1}) and s.bad_lines == 1
     assert r["skipped_user_events"] == 2 and r["duration_min"] == 0.1
+    ab = r["agent_behaviors"]
+    assert ab["done_claims"] == 1 and ab["done_claim_then_probe"] == 0 and ab["run_count"] == 2, ab
+    s2 = Session("t2", "p")
+    m = "2026-01-05T11:{:02d}:00Z"
+    ev2 = [
+        {"type": "user", "timestamp": m.format(0), "message": {"content": "please fix the test"}},
+        {"type": "assistant", "timestamp": m.format(1), "message": {"id": "a1", "content": [{"type": "tool_use", "id": "b1", "name": "Bash", "input": {"command": "pnpm test"}}]}},
+        {"type": "user", "timestamp": m.format(1), "message": {"content": [{"type": "tool_result", "tool_use_id": "b1", "is_error": True, "content": "x"}]}},
+        {"type": "assistant", "timestamp": m.format(2), "message": {"id": "a2", "content": [{"type": "tool_use", "id": "b2", "name": "Bash", "input": {"command": "pnpm test"}}]}},
+        {"type": "user", "timestamp": m.format(2), "message": {"content": [{"type": "tool_result", "tool_use_id": "b2", "is_error": False, "content": "x"}]}},
+        {"type": "assistant", "timestamp": m.format(3), "message": {"id": "a3", "content": [{"type": "tool_use", "id": "b3", "name": "Bash", "input": {"command": "pnpm lint"}}]}},
+        {"type": "user", "timestamp": m.format(3), "message": {"content": [{"type": "tool_result", "tool_use_id": "b3", "content": "x"}]}},
+        {"type": "assistant", "timestamp": m.format(4), "message": {"id": "a4", "content": [{"type": "text", "text": "Should I also update the docs? Let me know."}]}},
+        {"type": "user", "timestamp": m.format(5), "message": {"content": "yes"}},
+        {"type": "assistant", "timestamp": m.format(6), "message": {"id": "a5", "content": [{"type": "text", "text": "Done. All tests pass."}]}},
+        {"type": "user", "timestamp": m.format(7), "message": {"content": "are you sure it works? verify"}},
+        {"type": "assistant", "timestamp": m.format(8), "message": {"id": "a6", "content": [{"type": "text", "text": "You're right, my mistake. You need to run the migration manually.\n\n### Option A\nkeep it\n### Option B\nrewrite it\n\nWhich do you prefer?"}]}},
+        {"type": "assistant", "timestamp": m.format(8), "message": {"id": "a6", "content": [{"type": "tool_use", "id": "q1", "name": "AskUserQuestion", "input": {}}]}},
+        {"type": "assistant", "timestamp": m.format(9), "message": {"id": "a7", "content": [{"type": "text", "text": "x" * 2600}]}},
+    ]
+    scan_lines([json.dumps(e) for e in ev2], s2, tz, False)
+    ab = s2.row()["agent_behaviors"]
+    assert ab["assistant_text_msgs"] == 4 and ab["done_claims"] == 1 and ab["done_claim_then_probe"] == 1, ab
+    assert ab["prose_questions"] == 1 and ab["structured_questions"] == 1, ab
+    assert ab["blocked_on_user"] == 1 and ab["retractions"] == 1 and ab["options_offered"] == 1 and ab["long_replies"] == 1, ab
+    assert ab["retries_after_error"] == 1 and ab["tool_results"] == 3, ab
+    assert ab["run_count"] == 3 and ab["long_runs_over_2min"] == 1, ab
+    assert s2.run_stats() == ([3, 0, 1], [240.0, 60.0, 120.0]), s2.run_stats()
+    agg = aggregate([s, s2], tz, 2)
+    a = agg["agent_behaviors"]
+    assert a["done_claim_then_probe"] == 1 and a["retries_after_error"] == 1 and a["runs"]["count"] == 5, a
+    assert a["runs"]["tool_calls_p90"] == 7 and a["runs"]["minutes_median"] == 1.0 and a["assistant_msg_chars"]["count"] == 5, a
+    assert a["by_harness"]["claude-code"]["tool_results"] == 4, a
+    scope = {"generated_at": "t", "projects_dir": "p", "session_files": 2, "skipped_files": 0, "since_days": None,
+             "excludes": [], "first_start": None, "last_end": None, "scan_seconds": 0}
+    rep = render_report(agg, [s.row(), s2.row()], scope, "UTC")
+    assert 0 < rep.index("## Agent behaviors (assistant messages)") < rep.index("## Feedback signals (human messages)")
+    assert "claude-code: text signals measured, retries measured" in rep
+    assert "PushNotification" in rep and "drafts" in rep and agg["tracking_tools"]["Agent"] == 2 and agg["bash_process_probes"] == 0, agg["tracking_tools"]
+    assert agg["mcp_servers"]["slack"] == {"total": 1, "reads": 0, "writes": 1, "drafts": 0, "sends": 1, "top_tools": {"send": 1}}, agg["mcp_servers"]
+    assert mcp_kind("slack_send_message_draft") == "drafts" and mcp_kind("notion-fetch") == "reads" and mcp_kind("save_issue") == "writes" and mcp_kind("pack_query") == "reads"
+    assert harness_parity({"codex"})["codex"]["human turns"] == "measured" and harness_parity(set())["cursor"]["human turns"] == STORE_ABSENT
+    assert AGENT_RE["probe"].search("it is still not working") and not AGENT_RE["probe"].search("still need the docs")
+    s3 = Session("t3", "p")
+    scan_lines([json.dumps({"type": "user", "timestamp": "2026-01-05T12:00:00Z", "message": {"content": "is it ok to remove this?"}})], s3, tz, False)
+    assert s3.feedback.get("approvals", 0) == 0 and s3.feedback.get("corrections") == 1, dict(s3.feedback)
+    assert any_ts(None) is None and any_ts(1767261600) == any_ts(1767261600000) == any_ts("2026-01-01T10:00:00Z")
+    assert classify_asks("wait, is it really working? show me a screenshot") == ["steer mid-run", "trust check", "show me"]
+    assert classify_ask("done on my side, I added the key") == "unblock or manual step"
+    assert classify_ask("merged it, next") == "unblock or manual step" and classify_ask("merged") == "approve or hand back"
+    assert classify_ask("where is the file? what's the link") == "locate deliverable"
+    assert classify_ask("did you actually run the tests?") == "trust check"
+    assert classify_ask("hold on, before you continue") == "steer mid-run"
+    assert classify_ask("show me a preview") == "show me"
+    assert classify_ask("be more concise, this is too long") == "conciseness"
+    assert classify_ask("What is the progress? Please be concise.") == "status or steering"
+    assert classify_ask("please don't add comments") == "implement or fix"
+    s2 = Session("t2", "p")
+    t2 = "2026-01-05T{}Z"
+    scan_lines([json.dumps(e) for e in [
+        {"type": "user", "timestamp": t2.format("10:00:00"), "message": {"content": [
+            {"type": "text", "text": "feedback:\n- a\n- b\n* c\n1. d\n2) e\n[Image #1]"}, {"type": "image"}]}},
+        {"type": "user", "timestamp": t2.format("10:20:00"), "message": {"content": "- x\n- y"}},
+        {"type": "user", "timestamp": t2.format("10:51:00"), "message": {"content": "where are we?"}},
+    ]], s2, tz, False)
+    r2 = s2.row()
+    assert r2["user_turns"] == 3 and r2["pasted_images"] == 2
+    assert r2["feedback_batches"] == 1 and r2["feedback_batch_bullets_max"] == 5 and r2["feedback_batches_with_images"] == 1
+    assert r2["resumptions"] == 1 and r2["resumption_asks"] == {"status or steering": 1}
+    assert r2["asks_all"]["status or steering"] == 1
+    agg = aggregate([s, s2], tz, 1)
+    assert agg["resumptions"] == 1 and agg["feedback_batches"] == 1 and agg["feedback_batch_bullets"] == {"median": 5, "max": 5}
+    assert agg["asks_all"]["show me"] == 1 and agg["asks"]["show me"] == 1
+    rep = render_report(agg, [r, r2], {"generated_at": "", "projects_dir": "", "session_files": 0, "skipped_files": 0,
+                                       "since_days": None, "excludes": [], "first_start": None, "last_end": None, "scan_seconds": 0}, "UTC")
+    assert "What I ask when I come back" in rep and "also matched" in rep and "Feedback batches" in rep
+    assert s.models == Counter({"claude-x": 1})
     print("self-test ok")
 
 
@@ -736,60 +1093,115 @@ SECRET_RE = re.compile(
 )
 
 
-def print_user_turns(projects_dir, sid_prefix, max_chars):
+def emit_turn(n, ts, text, max_chars):
+    red = " ".join(SECRET_RE.sub("[redacted]", text).split())
+    tail = "..." if len(red) > max_chars else ""
+    print(f"{n:03d} {str(ts or '')[:16]} [{'; '.join(classify_asks(text))}] | {red[:max_chars]}{tail}")
+
+
+def find_sessions(projects_dir, sid_prefix, codex_dir, cursor_dir, opencode_dir):
+    found = []
+    for pdir in os.scandir(projects_dir) if os.path.isdir(projects_dir) else []:
+        if pdir.is_dir():
+            found += [("claude-code", e.path) for e in os.scandir(pdir.path) if e.is_file() and e.name.endswith(".jsonl") and e.name.startswith(sid_prefix)]
+    for sub in ("sessions", "archived_sessions"):
+        root = os.path.join(codex_dir, sub)
+        for dirpath, _dirs, files in os.walk(root) if os.path.isdir(root) else []:
+            found += [("codex", os.path.join(dirpath, f)) for f in files if f.endswith(".jsonl") and sid_prefix in f]
+    vscdb = os.path.join(cursor_dir, "globalStorage", "state.vscdb")
+    if os.path.isfile(vscdb):
+        db = sqlite3.connect(f"file:{vscdb}?mode=ro&immutable=1", uri=True)
+        try:
+            found += [("cursor", (vscdb, r[0])) for r in db.execute("select composerId from composerHeaders where composerId like ? and not coalesce(isSubagent, 0)", (sid_prefix + "%",))]
+        except sqlite3.Error:
+            pass
+        db.close()
+    ocdb = os.path.join(opencode_dir, "opencode.db")
+    if os.path.isfile(ocdb):
+        con, tmp = sqlite_copy(ocdb)
+        try:
+            found += [("opencode", (ocdb, r[0])) for r in con.execute("select id from session where id like ? and parent_id is null", (sid_prefix + "%",))]
+        except sqlite3.Error:
+            pass
+        con.close()
+        shutil.rmtree(tmp, ignore_errors=True)
+    return found
+
+
+def print_user_turns(projects_dir, sid_prefix, max_chars, codex_dir=None, cursor_dir=None, opencode_dir=None):
     """Stream one session's human turns to stdout with secret-shaped strings redacted.
 
-    Used by the mining-session-practices skill for its bounded qualitative read:
+    Used by the conversation-use-cases skill for its bounded qualitative read:
     the agent reads a handful of sessions this way instead of opening JSONL
     files. Nothing is written to disk.
     """
-    matches = []
-    for pdir in os.scandir(projects_dir):
-        if not pdir.is_dir():
-            continue
-        for entry in os.scandir(pdir.path):
-            if entry.is_file() and entry.name.endswith(".jsonl") and entry.name.startswith(sid_prefix):
-                matches.append(entry.path)
-    if not matches:
-        codex_dir = os.path.expanduser("~/.codex")
-        for sub in ("sessions", "archived_sessions"):
-            root = os.path.join(codex_dir, sub)
-            for dirpath, _dirs, files in os.walk(root) if os.path.isdir(root) else []:
-                for f in files:
-                    if f.endswith(".jsonl") and sid_prefix in f:
-                        matches.append(os.path.join(dirpath, f))
-        if len(matches) == 1:
-            return print_codex_user_turns(matches[0], max_chars)
+    matches = find_sessions(projects_dir, sid_prefix, codex_dir or os.path.expanduser("~/.codex"), cursor_dir or CURSOR_USER_DIR, opencode_dir or OPENCODE_DIR)
     if len(matches) != 1:
         print(f"expected exactly one session matching {sid_prefix!r}, found {len(matches)}", file=sys.stderr)
-        for m in matches[:10]:
-            print("  " + os.path.basename(m)[:-6], file=sys.stderr)
+        for h, ref in matches[:10]:
+            print(f"  {h} {ref[1] if isinstance(ref, tuple) else os.path.basename(ref)[:-6]}", file=sys.stderr)
+        if not matches:
+            print("--user-turns reads Claude Code, Codex, Cursor and OpenCode stores; Pi, Droid, Gemini CLI, Amp, Copilot CLI, Goose and Hermes sessions are counted but not readable this way", file=sys.stderr)
         return 2
-    n = 0
-    with open(matches[0], encoding="utf-8", errors="replace") as fh:
-        for line in fh:
-            try:
-                ev = json.loads(line)
-            except Exception:
-                continue
-            if ev.get("type") != "user" or ev.get("isSidechain"):
-                continue
-            msg = ev.get("message") if isinstance(ev.get("message"), dict) else {}
-            text = user_text(msg.get("content"))
-            if text is None:
-                continue
-            origin = ev.get("origin") if isinstance(ev.get("origin"), dict) else {}
-            stripped = text.lstrip()
-            if ev.get("isMeta") or (origin and origin.get("kind") != "human"):
-                continue
-            if stripped.startswith(SKIP_PREFIXES) or stripped.startswith(INTERRUPT_PREFIX):
-                continue
-            n += 1
-            red = " ".join(SECRET_RE.sub("[redacted]", text).split())
-            tail = "..." if len(red) > max_chars else ""
-            print(f"{n:03d} {str(ev.get('timestamp', ''))[:16]} | {red[:max_chars]}{tail}")
+    harness, ref = matches[0]
+    printer = {"claude-code": print_claude_user_turns, "codex": print_codex_user_turns, "cursor": print_cursor_user_turns, "opencode": print_opencode_user_turns}[harness]
+    n = printer(ref, max_chars)
     print(f"# {n} human turns, redacted, stdout only", file=sys.stderr)
     return 0
+
+
+def print_claude_user_turns(path, max_chars):
+    n = 0
+    for ev in iter_jsonl(path):
+        if ev.get("type") != "user" or ev.get("isSidechain"):
+            continue
+        msg = ev.get("message") if isinstance(ev.get("message"), dict) else {}
+        text = user_text(msg.get("content"))
+        if text is None:
+            continue
+        origin = ev.get("origin") if isinstance(ev.get("origin"), dict) else {}
+        stripped = text.lstrip()
+        if ev.get("isMeta") or (origin and origin.get("kind") != "human") or stripped.startswith(SKIP_PREFIXES) or stripped.startswith(INTERRUPT_PREFIX):
+            continue
+        n += 1
+        emit_turn(n, ev.get("timestamp"), text, max_chars)
+    return n
+
+
+def print_cursor_user_turns(ref, max_chars):
+    db_path, cid = ref
+    db = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
+    n = 0
+    for hdr in (cursor_json(db, f"composerData:{cid}") or {}).get("fullConversationHeadersOnly") or []:
+        bub = cursor_json(db, f"bubbleId:{cid}:{hdr.get('bubbleId')}") or {}
+        text = cursor_human_text(bub)
+        if text is not None:
+            n += 1
+            emit_turn(n, bub.get("createdAt"), text, max_chars)
+    db.close()
+    return n
+
+
+def print_opencode_user_turns(ref, max_chars):
+    db_path, sid = ref
+    con, tmp = sqlite_copy(db_path)
+    n = 0
+    try:
+        parts = opencode_parts(con, sid)
+        for mrow in con.execute("select id, time_created, data from message where session_id=? order by time_created, id", (sid,)):
+            try:
+                m = json.loads(mrow["data"])
+            except Exception:
+                continue
+            text = opencode_user_text(parts.get(mrow["id"], [])) if m.get("role") == "user" else ""
+            if text.strip():
+                n += 1
+                emit_turn(n, ms_ts(mrow["time_created"]), text, max_chars)
+    finally:
+        con.close()
+        shutil.rmtree(tmp, ignore_errors=True)
+    return n
+
 
 def codex_text(content):
     if isinstance(content, str):
@@ -843,9 +1255,21 @@ def codex_human_text(ev):
     return text
 
 
+def codex_assistant_text(ev):
+    """Return the text of a Codex assistant message event, "" when it has none, or None for other events."""
+    pl = ev.get("payload") if isinstance(ev.get("payload"), dict) else {}
+    t, pt = ev.get("type"), pl.get("type")
+    if t == "response_item" and pt == "message" and pl.get("role") == "assistant":
+        return codex_text(pl.get("content")) or ""
+    if t == "event_msg" and pt == "agent_message":
+        return (pl.get("message") if isinstance(pl.get("message"), str) else codex_text(pl.get("content"))) or ""
+    return None
+
+
 def scan_codex_file(path, tz):
     sess = None
     seen = set()
+    last_turn = None
     base = os.path.basename(path)[:-6]
     for ev in iter_codex_events(path):
         pl = ev.get("payload") if isinstance(ev.get("payload"), dict) else {}
@@ -859,6 +1283,7 @@ def scan_codex_file(path, tz):
             if t == "session_meta":
                 sess.originator = str(pl.get("originator") or pl.get("source") or "")[:30]
                 sess.entrypoint = sess.originator
+                sess.parent = str(pl.get("parent_thread_id") or "") or None
                 if "exec" in (sess.originator or ""):
                     sess.harness = "codex-exec"
                 sess.touch(ts)
@@ -875,20 +1300,43 @@ def scan_codex_file(path, tz):
             if key in seen:
                 continue
             seen.add(key)
+            if isinstance(pl.get("content"), list):
+                sess.pasted_images += sum(1 for b in pl["content"] if isinstance(b, dict) and b.get("type") == "input_image")
             sess.touch(ts)
             sess.human_turn(text, ts, tz)
             continue
-        if t == "response_item":
-            if pt == "message" and pl.get("role") == "assistant":
-                sess.assistant_turn(ts, pl.get("id") or str(ev.get("ordinal")), False)
-            elif pt in ("function_call", "custom_tool_call"):
-                sess.tool(pl.get("name"), ts)
+        atext = codex_assistant_text(ev)
+        if atext is not None:
+            key = ("assistant", str(ev.get("timestamp", ""))[:16], atext[:80])
+            if key not in seen:
+                seen.add(key)
+                sess.assistant_turn(ts, f"assistant-{len(seen)}", False)
+                sess.assistant_text(atext, [])
+            continue
+        if t == "response_item" and pt in ("function_call", "custom_tool_call"):
+            sess.tool(pl.get("name"), ts)
         elif t == "event_msg":
-            if pt == "agent_message":
-                sess.assistant_turn(ts, str(ev.get("ordinal")), False)
-            elif pt == "turn_aborted":
+            item = pl.get("item") if isinstance(pl.get("item"), dict) else {}
+            if pt == "turn_aborted":
                 sess.interrupts += 1
+            elif pt == "item_completed" and item.get("type") == "UserMessage":
+                tid = pl.get("turn_id")
+                sess.queued += bool(tid and tid == last_turn)
+                last_turn = tid
     return sess
+
+
+def fold_codex_subagents(found):
+    by_id = {s.session_id: s for s in found}
+    out = []
+    for s in found:
+        parent = by_id.get(s.parent) if s.parent else None
+        if parent is not None and parent is not s:
+            parent.subagent_files += 1
+            parent.sub_tool_calls.update(s.tool_calls)
+        elif not s.parent:
+            out.append(s)
+    return out
 
 
 def discover_codex(codex_dir, since_days, excludes):
@@ -913,10 +1361,10 @@ def discover_codex(codex_dir, since_days, excludes):
 
 KNOWN_STORES = [
     ("claude-code", "~/.claude/projects", "parsed"),
-    ("codex", "~/.codex/sessions", "parsed"),
-    ("codex (archived)", "~/.codex/archived_sessions", "parsed"),
-    ("cursor", "~/Library/Application Support/Cursor/User/globalStorage", "parsed (state.vscdb)"),
-    ("opencode", "~/.local/share/opencode", "parsed (opencode.db); legacy storage/ json not parsed"),
+    ("codex", "~/.codex/sessions", "parsed; subagent threads folded into their parent"),
+    ("codex (archived)", "~/.codex/archived_sessions", "parsed; subagent threads folded into their parent"),
+    ("cursor", "~/Library/Application Support/Cursor/User/globalStorage", "parsed (state.vscdb); simulated prompts skipped, cancelled tool calls stand in for interrupts, queue not stored"),
+    ("opencode", "~/.local/share/opencode", "parsed (opencode.db), unvalidated on real data; legacy storage/ json not parsed"),
     ("pi", "~/.pi/agent/sessions", "parsed, unvalidated on real data"),
     ("droid", "~/.factory/sessions", "parsed, unvalidated on real data"),
     ("gemini-cli", "~/.gemini/tmp", "parsed, unvalidated on real data"),
@@ -954,29 +1402,86 @@ def discover_stores():
                     except OSError:
                         pass
         last = datetime.fromtimestamp(newest, tz=timezone.utc).date().isoformat() if newest else "-"
+        if name == "opencode" and os.path.isfile(os.path.join(full, "opencode.db")):
+            con, tmp = sqlite_copy(os.path.join(full, "opencode.db"))
+            try:
+                status += f"; {con.execute('select count(*) from session').fetchone()[0]} sessions in db"
+            except sqlite3.Error:
+                pass
+            con.close()
+            shutil.rmtree(tmp, ignore_errors=True)
         rows.append((name, path, files, f"{size / 1e6:.1f} MB", last, status))
     print(md_table(["harness", "path", "files", "size", "newest", "status"], rows) if rows else "no known agent stores found")
+
+
+PARITY_SIGNALS = ("human turns", "interrupts", "queued prompts", "mid-run steering", "tool calls", "subagents", "models",
+                  "permission modes", "timestamps", "assistant text", "pasted images", "PR links", "session entrypoint")
+BASIC_SIGNALS = ("human turns", "tool calls", "timestamps", "assistant text")
+STORE_ABSENT = "store absent on this machine"
+SKIPPED_BY_FLAG = "skipped by flag"
+
+
+def parity_row(*measured, partial=("mid-run steering",)):
+    return {s: "measured" if s in measured else "partial" if s in partial else "not measured" for s in PARITY_SIGNALS}
+
+
+PARITY = {
+    "claude-code": parity_row(*BASIC_SIGNALS, "interrupts", "queued prompts", "subagents", "models", "permission modes", "pasted images", "PR links", "session entrypoint"),
+    "codex": parity_row(*BASIC_SIGNALS, "interrupts", "queued prompts", "subagents", "models", "permission modes", "pasted images", "session entrypoint"),
+    "cursor": parity_row(*BASIC_SIGNALS, "subagents", "models", "pasted images", "session entrypoint", partial=("mid-run steering", "interrupts")),
+    "opencode": parity_row(*BASIC_SIGNALS, "interrupts", "subagents", "models", "pasted images", "session entrypoint"),
+    "pi": parity_row(*BASIC_SIGNALS, "models"),
+    "droid": parity_row(*BASIC_SIGNALS, "models"),
+    "gemini-cli": parity_row(*BASIC_SIGNALS, "models"),
+    "amp": parity_row("human turns", "tool calls", "assistant text", partial=("mid-run steering", "timestamps")),
+    "copilot-cli": parity_row(*BASIC_SIGNALS),
+    "goose": parity_row(*BASIC_SIGNALS, partial=("mid-run steering", "models")),
+    "hermes": parity_row(*BASIC_SIGNALS, "models"),
+}
+
+
+def stores_present(projects_dir):
+    present = {name.split(" ")[0] for name, path, _status in KNOWN_STORES if os.path.exists(os.path.expanduser(path))}
+    if os.path.isdir(projects_dir):
+        present.add("claude-code")
+    return present
+
+
+def harness_parity(present):
+    return {h: {s: v if h in present else STORE_ABSENT for s, v in row.items()} for h, row in PARITY.items()}
 
 
 def print_codex_user_turns(path, max_chars):
     n = 0
     for ev in iter_codex_events(path):
         text = codex_human_text(ev)
-        if text is None:
-            continue
-        n += 1
-        red = " ".join(SECRET_RE.sub("[redacted]", text).split())
-        tail = "..." if len(red) > max_chars else ""
-        print(f"{n:03d} {str(ev.get('timestamp', ''))[:16]} | {red[:max_chars]}{tail}")
-    print(f"# {n} human turns, redacted, stdout only", file=sys.stderr)
-    return 0
+        if text is not None:
+            n += 1
+            emit_turn(n, ev.get("timestamp"), text, max_chars)
+    return n
+
 
 CURSOR_USER_DIR = os.path.expanduser("~/Library/Application Support/Cursor/User")
 
 
-def cursor_workspace_labels(db):
+def cursor_json(db, key):
+    r = db.execute("select value from cursorDiskKV where key=?", (key,)).fetchone()
+    try:
+        return json.loads(r[0]) if r else None
+    except Exception:
+        return None
+
+
+def cursor_human_text(bub):
+    text = bub.get("text") or ""
+    if bub.get("type") != 1 or bub.get("isSimulatedMsg") or not text.strip():
+        return None
+    return text
+
+
+def cursor_workspace_labels(db, user_dir):
     labels = {}
-    for wj in glob.glob(os.path.join(CURSOR_USER_DIR, "workspaceStorage", "*", "workspace.json")):
+    for wj in glob.glob(os.path.join(user_dir, "workspaceStorage", "*", "workspace.json")):
         try:
             j = json.load(open(wj))
         except Exception:
@@ -994,12 +1499,12 @@ def cursor_workspace_labels(db):
     return labels
 
 
-def scan_cursor(since_days, tz):
+def scan_cursor(since_days, tz, user_dir=CURSOR_USER_DIR):
     """Cursor agent chats live in globalStorage/state.vscdb: composerHeaders (index) and
     cursorDiskKV rows composerData:<id> and bubbleId:<composer>:<bubble>. Bubble type 1 is the
     human, type 2 the assistant; a type 2 bubble with toolFormerData is one tool call. Subagent
     composers (isSubagent=1) are attributed to the parent as subagent tool calls."""
-    db_path = os.path.join(CURSOR_USER_DIR, "globalStorage", "state.vscdb")
+    db_path = os.path.join(user_dir, "globalStorage", "state.vscdb")
     if not os.path.isfile(db_path):
         return []
     cutoff_ms = (time.time() - since_days * 86400) * 1000 if since_days else None
@@ -1008,7 +1513,7 @@ def scan_cursor(since_days, tz):
         db.execute("select 1 from composerHeaders limit 1")
     except sqlite3.Error:
         return []
-    labels = cursor_workspace_labels(db)
+    labels = cursor_workspace_labels(db, user_dir)
     sessions = {}
     order = []
     rows = db.execute("select composerId, workspaceId, createdAt, lastUpdatedAt, isSubagent, value from composerHeaders").fetchall()
@@ -1031,29 +1536,25 @@ def scan_cursor(since_days, tz):
             order.append(parent)
         if is_sub:
             sess.subagent_files += 1
-        r = db.execute("select value from cursorDiskKV where key=?", (f"composerData:{cid}",)).fetchone()
-        if not r:
-            continue
-        try:
-            cd = json.loads(r[0])
-        except Exception:
+        cd = cursor_json(db, f"composerData:{cid}")
+        if cd is None:
             continue
         mname = (cd.get("modelConfig") or {}).get("modelName")
         if mname:
             sess.models[str(mname)[:40]] += 1
         for hdr in cd.get("fullConversationHeadersOnly") or []:
-            b = db.execute("select value from cursorDiskKV where key=?", (f"bubbleId:{cid}:{hdr.get('bubbleId')}",)).fetchone()
-            if not b:
-                continue
-            try:
-                bub = json.loads(b[0])
-            except Exception:
+            bub = cursor_json(db, f"bubbleId:{cid}:{hdr.get('bubbleId')}")
+            if not bub:
                 continue
             ts = parse_ts(bub.get("createdAt"))
             if bub.get("type") == 1:
-                text = bub.get("text") or ""
-                if is_sub or not text.strip():
+                if is_sub:
                     continue
+                text = cursor_human_text(bub)
+                if text is None:
+                    sess.skipped_user_events += bool(bub.get("isSimulatedMsg"))
+                    continue
+                sess.pasted_images += len((bub.get("context") or {}).get("selectedImages") or [])
                 sess.touch(ts)
                 sess.human_turn(text, ts, tz)
             elif bub.get("type") == 2:
@@ -1063,9 +1564,11 @@ def scan_cursor(since_days, tz):
                     if is_sub:
                         sess.sub_tool_calls[name] += 1
                     else:
-                        sess.tool(name, ts)
+                        sess.tool_result(sess.tool(name, ts), tf.get("status") == "error")
+                        sess.interrupts += tf.get("status") == "cancelled"
                 elif not is_sub:
                     sess.assistant_turn(ts, bub.get("requestId") or hdr.get("bubbleId") or "?", False)
+                    sess.assistant_text(bub.get("text"), [])
     db.close()
     return [sessions[k] for k in order]
 
@@ -1079,72 +1582,108 @@ def ms_ts(v):
         return None
 
 
-def scan_opencode(since_days, tz):
+def any_ts(v):
+    if isinstance(v, str):
+        return parse_ts(v)
+    if isinstance(v, (int, float)):
+        return ms_ts(v * (1000 if v < 1e11 else 1))
+    return None
+
+
+def sqlite_copy(db_path):
+    tmp = tempfile.mkdtemp(prefix="miner-")
+    dst = os.path.join(tmp, os.path.basename(db_path))
+    for suf in ("", "-wal", "-shm"):
+        if os.path.exists(db_path + suf):
+            shutil.copy2(db_path + suf, dst + suf)
+    con = sqlite3.connect(f"file:{dst}?mode=ro", uri=True)
+    con.row_factory = sqlite3.Row
+    return con, tmp
+
+
+def opencode_parts(con, sid):
+    parts = defaultdict(list)
+    for prow in con.execute("select message_id, data from part where session_id=? order by id", (sid,)):
+        try:
+            parts[prow["message_id"]].append(json.loads(prow["data"]))
+        except Exception:
+            continue
+    return parts
+
+
+def opencode_user_text(ps):
+    return "\n".join(p.get("text", "") for p in ps if p.get("type") == "text" and not p.get("synthetic"))
+
+
+def scan_opencode(since_days, tz, root=OPENCODE_DIR):
     """OpenCode keeps sessions in ~/.local/share/opencode/opencode.db (SQLite, WAL): tables
     session, message (data json = Message minus id/sessionID), part (data json = Part minus ids).
     A user message's text is its text parts; an assistant tool call is one part with type "tool"
-    and the tool name in part.tool. Older builds used storage/{session,message,part}/*.json with
+    and the tool name in part.tool. Child sessions (parent_id set) are subagents and feed the
+    parent's subagent buckets. Older builds used storage/{session,message,part}/*.json with
     the same shapes. The db and its WAL are copied to a temp dir and opened read-only so the live
     files are never touched. Not yet validated on a machine with real sessions."""
-    out = []
-    db_path = os.path.join(OPENCODE_DIR, "opencode.db")
+    out, by_id = [], {}
+    db_path = os.path.join(root, "opencode.db")
     cutoff_ms = (time.time() - since_days * 86400) * 1000 if since_days else None
-    if os.path.isfile(db_path):
-        tmp = tempfile.mkdtemp(prefix="oc-miner-")
-        try:
-            for suf in ("", "-wal", "-shm"):
-                src = db_path + suf
-                if os.path.exists(src):
-                    shutil.copy2(src, os.path.join(tmp, os.path.basename(src)))
-            con = sqlite3.connect(f"file:{os.path.join(tmp, 'opencode.db')}?mode=ro", uri=True)
-            con.row_factory = sqlite3.Row
-            projects = {r["id"]: r["worktree"] for r in con.execute("select id, worktree from project")}
-            for srow in con.execute("select * from session order by time_created"):
-                if cutoff_ms and srow["time_updated"] and srow["time_updated"] < cutoff_ms:
-                    continue
+    if not os.path.isfile(db_path):
+        return out
+    con, tmp = sqlite_copy(db_path)
+    try:
+        projects = {r["id"]: r["worktree"] for r in con.execute("select id, worktree from project")}
+        for srow in con.execute("select * from session order by time_created"):
+            if cutoff_ms and srow["time_updated"] and srow["time_updated"] < cutoff_ms:
+                continue
+            parent = by_id.get(srow["parent_id"]) if srow["parent_id"] else None
+            if srow["parent_id"] and parent is None:
+                continue
+            if parent is not None:
+                parent.subagent_files += 1
+                sess = parent
+            else:
                 sess = Session(srow["id"], codex_project_label(str(projects.get(srow["project_id"]) or srow["directory"] or "")))
                 sess.harness = "opencode"
                 sess.entrypoint = str(srow["agent"] or "")[:20] or None
-                if srow["parent_id"]:
-                    continue
                 sess.touch(ms_ts(srow["time_created"]))
-                parts = defaultdict(list)
-                for prow in con.execute("select * from part where session_id=? order by id", (srow["id"],)):
-                    try:
-                        parts[prow["message_id"]].append(json.loads(prow["data"]))
-                    except Exception:
-                        continue
-                for mrow in con.execute("select * from message where session_id=? order by time_created, id", (srow["id"],)):
-                    try:
-                        m = json.loads(mrow["data"])
-                    except Exception:
-                        continue
-                    ts = ms_ts(mrow["time_created"])
-                    ps = parts.get(mrow["id"], [])
-                    if m.get("role") == "user":
-                        text = "\n".join(p.get("text", "") for p in ps if p.get("type") == "text" and not p.get("synthetic"))
-                        if text.strip():
-                            sess.touch(ts)
-                            sess.human_turn(text, ts, tz)
-                        mdl = m.get("model") or {}
-                        if mdl.get("modelID"):
-                            sess.models[str(mdl["modelID"])[:40]] += 1
-                    else:
-                        if m.get("modelID"):
-                            sess.models[str(m["modelID"])[:40]] += 1
-                        tools = [p for p in ps if p.get("type") == "tool"]
-                        for p in tools:
-                            sess.tool(p.get("tool"), ts)
-                        if not tools:
-                            sess.assistant_turn(ts, mrow["id"], False)
-                sub = con.execute("select count(*) from session where parent_id=?", (srow["id"],)).fetchone()
-                sess.subagent_files = sub[0] if sub else 0
+                by_id[srow["id"]] = sess
                 out.append(sess)
-            con.close()
-        except sqlite3.Error as e:
-            print(f"[opencode] could not read {db_path}: {e}", file=sys.stderr)
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
+            parts = opencode_parts(con, srow["id"])
+            for mrow in con.execute("select * from message where session_id=? order by time_created, id", (srow["id"],)):
+                try:
+                    m = json.loads(mrow["data"])
+                except Exception:
+                    continue
+                ts = ms_ts(mrow["time_created"])
+                ps = parts.get(mrow["id"], [])
+                if parent is not None:
+                    if m.get("role") != "user":
+                        sess.sub_tool_calls.update(str(p.get("tool") or "(unnamed)")[:60] for p in ps if p.get("type") == "tool")
+                elif m.get("role") == "user":
+                    text = opencode_user_text(ps)
+                    if text.strip():
+                        sess.touch(ts)
+                        sess.human_turn(text, ts, tz)
+                    sess.pasted_images += sum(1 for p in ps if p.get("type") == "file" and str(p.get("mime") or "").startswith("image/"))
+                    mdl = m.get("model") or {}
+                    if mdl.get("modelID"):
+                        sess.models[str(mdl["modelID"])[:40]] += 1
+                else:
+                    if m.get("modelID"):
+                        sess.models[str(m["modelID"])[:40]] += 1
+                    if (m.get("error") or {}).get("name") == "MessageAbortedError":
+                        sess.interrupts += 1
+                    tools = [p for p in ps if p.get("type") == "tool"]
+                    names = []
+                    for p in tools:
+                        names.append(sess.tool(p.get("tool"), ts))
+                        sess.tool_result(names[-1], (p.get("state") or {}).get("status") == "error")
+                    sess.assistant_turn(ts, mrow["id"], bool(tools))
+                    sess.assistant_text("\n".join(p.get("text", "") for p in ps if p.get("type") == "text"), names)
+    except sqlite3.Error as e:
+        print(f"[opencode] could not read {db_path}: {e}", file=sys.stderr)
+    finally:
+        con.close()
+        shutil.rmtree(tmp, ignore_errors=True)
     return out
 
 def blocks_text(content):
@@ -1224,8 +1763,8 @@ def scan_anthropic_jsonl(root, harness, since_days, tz, header_types=("session",
                 tools = blocks_tools(msg.get("content"))
                 for name in tools:
                     sess.tool(name, ts)
-                if not tools:
-                    sess.assistant_turn(ts, ev.get("id") or str(ts), False)
+                sess.assistant_turn(ts, ev.get("id") or str(ts), bool(tools))
+                sess.assistant_text(blocks_text(msg.get("content")), tools)
                 if msg.get("model"):
                     sess.models[str(msg["model"])[:40]] += 1
         if sess is not None and sess.start:
@@ -1277,8 +1816,8 @@ def scan_gemini(root, since_days, tz):
                 for c in calls:
                     if isinstance(c, dict):
                         sess.tool(c.get("name"), ts)
-                if not calls:
-                    sess.assistant_turn(ts, r.get("id") or str(ts), False)
+                sess.assistant_turn(ts, r.get("id") or str(ts), bool(calls))
+                sess.assistant_text(r.get("content") if isinstance(r.get("content"), str) else blocks_text(r.get("content")), [])
                 if r.get("model"):
                     sess.models[str(r["model"])[:40]] += 1
         if sess.start:
@@ -1315,8 +1854,8 @@ def scan_amp(root, since_days, tz):
                 tools = blocks_tools(m.get("content"))
                 for name in tools:
                     sess.tool(name, ts)
-                if not tools:
-                    sess.assistant_turn(ts, str(i), False)
+                sess.assistant_turn(ts, str(i), bool(tools))
+                sess.assistant_text(blocks_text(m.get("content")), tools)
         if sess.start:
             out.append(sess)
     return out
@@ -1351,6 +1890,7 @@ def scan_copilot(root, since_days, tz):
                     sess.human_turn(text, ts, tz)
             elif t == "assistant.message":
                 sess.assistant_turn(ts, ev.get("id") or str(ts), bool(data.get("toolRequests")))
+                sess.assistant_text(data.get("content"), [])
             elif t == "tool.execution_start":
                 sess.tool(data.get("toolName") or data.get("name"), ts)
         if sess.start:
@@ -1365,16 +1905,11 @@ def scan_sqlite_messages(db_path, harness, since_days, tz, sql_sessions, sql_mes
     out = []
     if not os.path.isfile(db_path):
         return out
-    tmp = tempfile.mkdtemp(prefix="miner-")
+    con, tmp = sqlite_copy(db_path)
     try:
-        for suf in ("", "-wal", "-shm"):
-            if os.path.exists(db_path + suf):
-                shutil.copy2(db_path + suf, os.path.join(tmp, os.path.basename(db_path) + suf))
-        con = sqlite3.connect(f"file:{os.path.join(tmp, os.path.basename(db_path))}?mode=ro", uri=True)
-        con.row_factory = sqlite3.Row
         cutoff = time.time() - since_days * 86400 if since_days else None
         for srow in con.execute(sql_sessions):
-            start = parse_ts(srow["started"]) if isinstance(srow["started"], str) else ms_ts(srow["started"] * (1000 if srow["started"] and srow["started"] < 1e11 else 1))
+            start = any_ts(srow["started"])
             if cutoff and start and start.timestamp() < cutoff:
                 continue
             sess = Session(str(srow["id"]), codex_project_label(str(srow["cwd"] or "")))
@@ -1383,8 +1918,7 @@ def scan_sqlite_messages(db_path, harness, since_days, tz, sql_sessions, sql_mes
                 sess.models[str(srow["model"])[:40]] += 1
             sess.touch(start)
             for m in con.execute(sql_messages, (srow["id"],)):
-                raw = m["ts"]
-                ts = parse_ts(raw) if isinstance(raw, str) else ms_ts(raw * (1000 if raw and raw < 1e11 else 1))
+                ts = any_ts(m["ts"])
                 role = m["role"]
                 if role == "user":
                     text = m["content"] or ""
@@ -1399,16 +1933,25 @@ def scan_sqlite_messages(db_path, harness, since_days, tz, sql_sessions, sql_mes
                     names = tools_from(m)
                     for n in names:
                         sess.tool(n, ts)
-                    if not names:
-                        sess.assistant_turn(ts, str(m["mid"]), False)
+                    sess.assistant_turn(ts, str(m["mid"]), bool(names))
+                    raw = m["content"] or ""
+                    try:
+                        raw = blocks_text(json.loads(raw)) if raw.lstrip().startswith("[") else raw
+                    except Exception:
+                        pass
+                    sess.assistant_text(raw, names)
             if sess.start:
                 out.append(sess)
-        con.close()
     except sqlite3.Error as e:
         print(f"[{harness}] could not read {db_path}: {e}", file=sys.stderr)
     finally:
+        con.close()
         shutil.rmtree(tmp, ignore_errors=True)
     return out
+
+
+GOOSE_SESSIONS_SQL = "select id, working_dir as cwd, created_at as started, provider_name as model from sessions"
+GOOSE_MESSAGES_SQL = "select id as mid, role, content_json as content, created_timestamp as ts, NULL as extra from messages where session_id=? order by created_timestamp"
 
 
 def goose_tools(m):
@@ -1435,8 +1978,7 @@ def scan_other_harnesses(since_days, tz):
         ("amp", lambda: scan_amp(os.path.expanduser("~/.local/share/amp/threads"), since_days, tz)),
         ("copilot-cli", lambda: scan_copilot(os.path.expanduser(os.environ.get("COPILOT_HOME", "~/.copilot")) + "/session-state", since_days, tz)),
         ("goose", lambda: scan_sqlite_messages(os.path.expanduser("~/.local/share/goose/sessions/sessions.db"), "goose", since_days, tz,
-            "select id, working_dir as cwd, created_at as started, provider_name as model from sessions",
-            "select id as mid, role, content_json as content, created_timestamp as ts, NULL as extra from messages where session_id=? order by created_timestamp", goose_tools)),
+            GOOSE_SESSIONS_SQL, GOOSE_MESSAGES_SQL, goose_tools)),
         ("hermes", lambda: scan_sqlite_messages(os.path.expanduser(os.environ.get("HERMES_HOME", "~/.hermes")) + "/state.db", "hermes", since_days, tz,
             "select id, cwd, started_at as started, model from sessions",
             "select id as mid, role, content, timestamp as ts, tool_calls as extra from messages where session_id=? order by timestamp", hermes_tools)),
@@ -1465,6 +2007,7 @@ def self_test_adapters():
             fh.write(json.dumps({"type": "message", "id": "m2", "timestamp": "2026-01-01T10:02:00Z", "message": {"role": "assistant", "content": [{"type": "toolCall", "name": "bash"}]}}) + "\n")
         got = scan_anthropic_jsonl(os.path.join(tmp, "pi"), "pi", None, tz)
         assert len(got) == 1 and got[0].user_turns == 1 and got[0].tool_calls.get("bash") == 1 and got[0].asks.get("status or steering") == 1, "pi adapter"
+        assert len(got[0].assistant_msgs) == 1, "pi assistant turn with tool call"
         g_dir = os.path.join(tmp, "gem", "abc", "chats")
         os.makedirs(g_dir)
         with open(os.path.join(g_dir, "session-1.jsonl"), "w") as fh:
@@ -1472,13 +2015,133 @@ def self_test_adapters():
             fh.write(json.dumps({"type": "user", "timestamp": "2026-01-01T10:01:00Z", "content": "fix the failing test"}) + "\n")
             fh.write(json.dumps({"type": "gemini", "timestamp": "2026-01-01T10:02:00Z", "toolCalls": [{"name": "run_shell_command"}]}) + "\n")
         got = scan_gemini(os.path.join(tmp, "gem"), None, tz)
-        assert len(got) == 1 and got[0].user_turns == 1 and got[0].tool_calls.get("run_shell_command") == 1, "gemini adapter"
+        assert len(got) == 1 and got[0].user_turns == 1 and got[0].tool_calls.get("run_shell_command") == 1 and len(got[0].assistant_msgs) == 1, "gemini adapter"
         amp_dir = os.path.join(tmp, "amp")
         os.makedirs(amp_dir)
         json.dump({"id": "T-1", "created": 1767261600000, "messages": [{"role": "user", "content": [{"type": "text", "text": "review this PR"}]}, {"role": "assistant", "content": [{"type": "tool_use", "name": "Read"}]}]}, open(os.path.join(amp_dir, "T-1.json"), "w"))
         got = scan_amp(amp_dir, None, tz)
-        assert len(got) == 1 and got[0].user_turns == 1 and got[0].tool_calls.get("Read") == 1, "amp adapter"
+        assert len(got) == 1 and got[0].user_turns == 1 and got[0].tool_calls.get("Read") == 1 and len(got[0].assistant_msgs) == 1, "amp adapter"
         print("adapter self-test ok", file=sys.stderr)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def self_test_stores():
+    import contextlib
+    import io
+    tmp = tempfile.mkdtemp(prefix="miner-selftest-")
+    tz = ZoneInfo("UTC")
+    ts = "2026-01-01T10:0{}:00Z"
+    try:
+        cx = os.path.join(tmp, "codex", "sessions")
+        os.makedirs(cx)
+        with open(os.path.join(cx, "rollout-cx-parent.jsonl"), "w") as fh:
+            for ev in [
+                {"type": "session_meta", "timestamp": ts.format(0), "payload": {"id": "cx-parent", "cwd": "/tmp/p", "originator": "codex-tui"}},
+                {"type": "turn_context", "timestamp": ts.format(0), "payload": {"model": "gpt-x", "approval_policy": "never"}},
+                {"type": "event_msg", "timestamp": ts.format(1), "payload": {"type": "task_started", "turn_id": "t1"}},
+                {"type": "response_item", "timestamp": ts.format(1), "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "fix the bug"}, {"type": "input_image", "image_url": "x"}]}},
+                {"type": "event_msg", "timestamp": ts.format(1), "payload": {"type": "item_completed", "turn_id": "t1", "item": {"type": "UserMessage"}}},
+                {"type": "response_item", "timestamp": ts.format(1), "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Done, fixed."}]}},
+                {"type": "event_msg", "timestamp": ts.format(1), "payload": {"type": "agent_message", "message": "Done, fixed."}},
+                {"type": "response_item", "timestamp": ts.format(2), "payload": {"type": "function_call", "name": "exec"}},
+                {"type": "response_item", "timestamp": ts.format(3), "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "also run the tests"}]}},
+                {"type": "event_msg", "timestamp": ts.format(3), "payload": {"type": "item_completed", "turn_id": "t1", "item": {"type": "UserMessage"}}},
+                {"type": "event_msg", "timestamp": ts.format(4), "payload": {"type": "turn_aborted", "turn_id": "t1", "reason": "interrupted"}},
+            ]:
+                fh.write(json.dumps(ev) + "\n")
+        with open(os.path.join(cx, "rollout-cx-child.jsonl"), "w") as fh:
+            for ev in [
+                {"type": "session_meta", "timestamp": ts.format(2), "payload": {"id": "cx-child", "cwd": "/tmp/p", "originator": "codex-tui", "parent_thread_id": "cx-parent"}},
+                {"type": "response_item", "timestamp": ts.format(2), "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "subtask"}]}},
+                {"type": "response_item", "timestamp": ts.format(2), "payload": {"type": "function_call", "name": "apply_patch"}},
+            ]:
+                fh.write(json.dumps(ev) + "\n")
+        got = fold_codex_subagents([scan_codex_file(p, tz) for p in discover_codex(os.path.join(tmp, "codex"), None, [])])
+        assert len(got) == 1, "codex fold"
+        c = got[0]
+        assert c.user_turns == 2 and c.queued == 1 and c.steer == 1 and c.interrupts == 1 and c.pasted_images == 1, "codex signals"
+        assert len(c.assistant_msgs) == 1 and c.agent_sig["assistant_text_msgs"] == 1 and c.agent_sig["done_claims"] == 1, "codex assistant dedup"
+        assert c.models == Counter({"gpt-x": 1}) and c.permission_modes == Counter({"never": 1}), "codex model and permission"
+        assert c.subagent_files == 1 and c.sub_tool_calls == Counter({"apply_patch": 1}) and c.tool_calls == Counter({"exec": 1}), "codex subagent"
+
+        cu = os.path.join(tmp, "cursor", "globalStorage")
+        os.makedirs(cu)
+        db = sqlite3.connect(os.path.join(cu, "state.vscdb"))
+        db.execute("create table composerHeaders(composerId, workspaceId, createdAt, lastUpdatedAt, isArchived, isSubagent, recency, checkpointAt, value)")
+        db.execute("create table cursorDiskKV(key, value)")
+        db.execute("insert into composerHeaders values ('cu-1', 'w1', 1, 1, 0, 0, 0, 0, ?)", (json.dumps({"unifiedMode": "agent"}),))
+        db.execute("insert into composerHeaders values ('cu-sub', 'w1', 1, 1, 0, 1, 0, 0, ?)", (json.dumps({"subagentInfo": {"parentComposerId": "cu-1"}}),))
+        kv = [
+            ("composerData:cu-1", {"modelConfig": {"modelName": "m1"}, "fullConversationHeadersOnly": [{"bubbleId": f"b{i}"} for i in range(1, 5)]}),
+            ("bubbleId:cu-1:b1", {"type": 1, "createdAt": ts.format(0), "text": "review the screenshot", "context": {"selectedImages": [{"uuid": "i"}]}}),
+            ("bubbleId:cu-1:b2", {"type": 2, "createdAt": ts.format(1), "toolFormerData": {"name": "read_file", "status": "cancelled"}}),
+            ("bubbleId:cu-1:b3", {"type": 1, "createdAt": ts.format(2), "text": "continue", "isSimulatedMsg": True}),
+            ("bubbleId:cu-1:b4", {"type": 2, "createdAt": ts.format(3), "text": "done"}),
+            ("composerData:cu-sub", {"fullConversationHeadersOnly": [{"bubbleId": "s1"}]}),
+            ("bubbleId:cu-sub:s1", {"type": 2, "createdAt": ts.format(1), "toolFormerData": {"name": "grep", "status": "completed"}}),
+        ]
+        db.executemany("insert into cursorDiskKV values (?, ?)", [(k, json.dumps(v)) for k, v in kv])
+        db.commit()
+        db.close()
+        got = scan_cursor(None, tz, user_dir=os.path.join(tmp, "cursor"))
+        assert len(got) == 1, "cursor sessions"
+        c = got[0]
+        assert c.user_turns == 1 and c.skipped_user_events == 1 and c.interrupts == 1 and c.pasted_images == 1 and c.steer == 0, "cursor signals"
+        assert c.tool_calls == Counter({"read_file": 1}) and c.sub_tool_calls == Counter({"grep": 1}) and c.subagent_files == 1 and c.models == Counter({"m1": 1}), ("cursor tools", dict(c.tool_calls), dict(c.sub_tool_calls), c.subagent_files, dict(c.models))
+
+        oc = os.path.join(tmp, "opencode")
+        os.makedirs(oc)
+        db = sqlite3.connect(os.path.join(oc, "opencode.db"))
+        db.execute("create table project(id, worktree)")
+        db.execute("create table session(id, project_id, parent_id, directory, agent, time_created, time_updated)")
+        db.execute("create table message(id, session_id, time_created, data)")
+        db.execute("create table part(id, message_id, session_id, data)")
+        db.execute("insert into project values ('p1', '/tmp/p')")
+        t0 = 1767261600000
+        db.execute("insert into session values ('oc-1', 'p1', NULL, '/tmp/p', 'build', ?, ?)", (t0, t0))
+        db.execute("insert into session values ('oc-1-child', 'p1', 'oc-1', '/tmp/p', 'general', ?, ?)", (t0 + 1000, t0 + 1000))
+        db.executemany("insert into message values (?, ?, ?, ?)", [
+            ("m1", "oc-1", t0, json.dumps({"role": "user", "model": {"modelID": "mx"}})),
+            ("m2", "oc-1", t0 + 500, json.dumps({"role": "assistant", "modelID": "mx", "error": {"name": "MessageAbortedError"}})),
+            ("m3", "oc-1-child", t0 + 1000, json.dumps({"role": "assistant", "modelID": "mx"})),
+        ])
+        db.executemany("insert into part values (?, ?, ?, ?)", [
+            ("p1", "m1", "oc-1", json.dumps({"type": "text", "text": "deploy it"})),
+            ("p2", "m1", "oc-1", json.dumps({"type": "file", "mime": "image/png"})),
+            ("p3", "m2", "oc-1", json.dumps({"type": "tool", "tool": "bash"})),
+            ("p4", "m3", "oc-1-child", json.dumps({"type": "tool", "tool": "read"})),
+        ])
+        db.commit()
+        db.close()
+        got = scan_opencode(None, tz, root=oc)
+        assert len(got) == 1, "opencode sessions"
+        o = got[0]
+        assert o.user_turns == 1 and o.interrupts == 1 and o.pasted_images == 1 and o.tool_calls == Counter({"bash": 1}), "opencode signals"
+        assert o.subagent_files == 1 and o.sub_tool_calls == Counter({"read": 1}) and o.models == Counter({"mx": 2}), "opencode subagent"
+        assert len(o.assistant_msgs) == 1, "opencode assistant turn with tool call"
+
+        gs = os.path.join(tmp, "goose")
+        os.makedirs(gs)
+        db = sqlite3.connect(os.path.join(gs, "sessions.db"))
+        db.execute("create table sessions(id, working_dir, created_at, provider_name)")
+        db.execute("create table messages(id, session_id, role, content_json, created_timestamp)")
+        db.execute("insert into sessions values ('g1', '/tmp/p', NULL, 'prov')")
+        db.executemany("insert into messages values (?, ?, ?, ?, ?)", [
+            (1, "g1", "user", json.dumps([{"type": "text", "text": "run the tests"}]), 1767261600),
+            (2, "g1", "assistant", json.dumps([{"type": "toolRequest", "toolRequest": {"value": {"name": "shell"}}}]), None),
+        ])
+        db.commit()
+        db.close()
+        got = scan_sqlite_messages(os.path.join(gs, "sessions.db"), "goose", None, tz, GOOSE_SESSIONS_SQL, GOOSE_MESSAGES_SQL, goose_tools)
+        assert len(got) == 1 and got[0].user_turns == 1 and got[0].tool_calls == Counter({"shell": 1}) and len(got[0].assistant_msgs) == 1, "goose null timestamps"
+
+        for prefix, expected in (("cx-par", 2), ("cu-", 1), ("oc-", 1)):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(io.StringIO()):
+                rc = print_user_turns(os.path.join(tmp, "none"), prefix, 40, os.path.join(tmp, "codex"), os.path.join(tmp, "cursor"), oc)
+            assert rc == 0 and len(buf.getvalue().splitlines()) == expected, ("user-turns", prefix)
+        print("store self-test ok", file=sys.stderr)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -1506,9 +2169,10 @@ def main():
     if args.self_test:
         self_test()
         self_test_adapters()
+        self_test_stores()
         return
     if args.user_turns:
-        sys.exit(print_user_turns(args.projects_dir, args.user_turns, args.max_chars))
+        sys.exit(print_user_turns(args.projects_dir, args.user_turns, args.max_chars, args.codex_dir))
     if args.discover:
         discover_stores()
         return
@@ -1527,11 +2191,15 @@ def main():
     codex_files = []
     if not args.no_codex and os.path.isdir(args.codex_dir):
         codex_files = discover_codex(args.codex_dir, args.since_days, args.exclude)
+        codex_sessions = []
         for i, path in enumerate(codex_files, 1):
             s = scan_codex_file(path, tz)
             if s is not None:
-                sessions.append(s)
+                codex_sessions.append(s)
             print(f"[codex {i}/{len(codex_files)}] {os.path.basename(path)[:40]} turns={s.user_turns if s else 0}", file=sys.stderr)
+        top = fold_codex_subagents(codex_sessions)
+        sessions.extend(top)
+        print(f"[codex] {len(codex_sessions) - len(top)} subagent threads folded into parents or dropped", file=sys.stderr)
     cursor_sessions = []
     if not args.no_cursor:
         cursor_sessions = scan_cursor(args.since_days, tz)
@@ -1563,10 +2231,15 @@ def main():
         "last_end": max((r["end"] for r in rows if r["end"]), default=None),
         "scan_seconds": round(time.time() - t0, 1),
     }
+    parity = harness_parity(stores_present(args.projects_dir))
+    others = ("pi", "droid", "gemini-cli", "amp", "copilot-cli", "goose", "hermes")
+    for h, off in (("codex", args.no_codex), ("cursor", args.no_cursor), ("opencode", args.no_opencode)) + tuple((h, args.no_other) for h in others):
+        if off and parity[h]["human turns"] != STORE_ABSENT:
+            parity[h] = {sig: SKIPPED_BY_FLAG for sig in PARITY_SIGNALS}
     os.makedirs(args.out, exist_ok=True)
     with open(os.path.join(args.out, "session_miner_output.json"), "w") as fh:
-        json.dump({"scope": scope, "aggregates": agg, "sessions": rows}, fh, indent=1, default=str)
-    report = render_report(agg, rows, scope, args.tz)
+        json.dump({"scope": scope, "aggregates": agg, "sessions": rows, "harness_parity": parity}, fh, indent=1, default=str)
+    report = render_report(agg, rows, scope, args.tz, parity)
     if args.notes and os.path.isfile(args.notes):
         with open(args.notes) as fh:
             report += "\n" + fh.read()

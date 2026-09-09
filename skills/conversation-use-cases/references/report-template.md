@@ -1,6 +1,6 @@
 # Conversation use-cases from my agent sessions
 
-Generated locally with `conversation-use-cases` on <YYYY-MM-DD>. Numbers come from `session_miner_output.json`. Intents are described in my words; no message text, credentials, or names of other people are in this file. Section 8 is verbatim from me.
+Generated locally with `conversation-use-cases` on <YYYY-MM-DD>. Numbers come from `session_miner_output.json`; a metric the parity table marks not measured, store absent or skipped by flag is written as `not measured`, never 0. Intents are described in my words; no message text, credentials, or names of other people are in this file. Section 8 (8a, 8b, 8c) is verbatim from me: the options I chose and the free text I typed, as I gave them.
 
 ## 0. Harnesses found (REQUIRED)
 
@@ -39,6 +39,8 @@ From "What the human turns ask for", top 8 categories. One line per category des
 | Numbered or lettered answers to agent questions | | |
 | Messages with pasted screenshots | | |
 | Conciseness requests | | |
+| Feedback batches (3+ bullets), of which with screenshots | | |
+| Resumptions (my turn 30+ min after my previous one) | | |
 
 One line each, in my words: how a status ask usually goes; how feedback arrives (single line or bulleted batch, with screenshots or not); how decisions get answered.
 
@@ -50,17 +52,21 @@ One line each, in my words: how a status ask usually goes; how feedback arrives 
 | Agent's work | ScheduleWakeup + Monitor | |
 | Agent's work | PushNotification | |
 | Agent's work | AskUserQuestion | |
+| Agent's work | Prose questions without AskUserQuestion | |
+| Agent's work | Done claims, then my trust probe | |
+| Agent's work | Blocked on me (asked me to do a step) | |
+| Agent's work | Runs over 2 active minutes, of all runs | |
 | My work | PR links | |
 | My work | Artifact publishes, files pushed to me | |
 | My work | Drafts vs direct sends (Slack, email) | |
 
 ## 5. Integrations (REQUIRED)
 
-| Integration | Calls | Read or write heavy |
-|---|---|---|
-| | | |
+| Integration | Calls | Reads | Writes (drafts / sends) |
+|---|---|---|---|
+| | | | |
 
-Skills invoked (top 8), CLIs dominating Bash (top 8), permission modes, models seen.
+From the MCP servers table. Skills invoked (top 8), CLIs dominating Bash (top 8), process probes and waits, permission modes, models seen.
 
 ## 6. Where chat fails me (REQUIRED)
 
@@ -72,13 +78,19 @@ Ranked. Each item: the moment, the metric that shows it, the count.
 
 ## 7. Ranked use-cases where UI beats chat (REQUIRED)
 
-| # | Use-case | Intent served | Trigger | Shows | You can | Evidence (metric, count) | Beats text because |
-|---|---|---|---|---|---|---|---|
-| 1 | | | | | | | |
-| 2 | | | | | | | |
-| 3 | | | | | | | |
+Cards come from `references/use-cases.md`. Rank = evidence count x fit weight from 8c (fits 2, sometimes 1, no 0). Cards not asked rank by evidence count alone and carry "not asked" in the Fit column.
+
+| # | Use-case | Intent served | Trigger | Shows | You can | Evidence (metric, count) | Fit (8c) | Rank score | Beats text because |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | | | | | | | | | |
+| 2 | | | | | | | | | |
+| 3 | | | | | | | | | |
 
 ## 8. In my own words (REQUIRED, from the interview)
+
+Chosen options and free text recorded as given. Nothing inferred.
+
+### 8a. Core (always asked)
 
 1. What do you check most often that the agent should just show you?
 2. Which feedback do you find yourself repeating?
@@ -86,9 +98,37 @@ Ranked. Each item: the moment, the metric that shows it, the count.
 4. What do you wish you could see while the agent works?
 5. What would make you trust "done"?
 
-## Privacy gate (all four must be true before sharing)
+### 8b. Issues and concerns (always asked)
+
+1. What bothers you most when working with agents?
+2. What have you stopped asking agents to do, and why?
+3. What do you still do by hand because the agent gets it wrong?
+4. What do you not trust the agent to report?
+5. What should never be automated for you?
+
+### 8c. Use-case cards (asked when the gate in `references/use-cases.md` fires)
+
+Fit is one of: fits, sometimes, no, not asked.
+
+| # | Use-case | Fit | What it must show | What you would click |
+|---|---|---|---|---|
+| 1 | Live run board | | | |
+| 2 | Needs-you panel with one-click unblocks | | | |
+| 3 | Verification board | | | |
+| 4 | Decision form for batched questions, with a decision log | | | |
+| 5 | Living plan and document with keep, cut and diff | | | |
+| 6 | Screenshot walkthrough with comment pins | | | |
+| 7 | Feedback batch triage table | | | |
+| 8 | Outbound draft composer | | | |
+| 9 | Errand tracker with per-step evidence | | | |
+| 10 | Long-run operation console and dev-stack panel | | | |
+| 11 | Analytics query workbench | | | |
+| 12 | Return-to-session brief | | | |
+
+## Privacy gate (all five must be true before sharing)
 
 - [ ] No message text: intents are in my words, only interview answers are verbatim
+- [ ] No project labels, session ids or paths copied from the raw report or JSON
 - [ ] The secret-shaped string count was checked; real credentials found in my history are rotated
 - [ ] No names of other people, customers, or private links
 - [ ] Temporary files deleted
