@@ -49,12 +49,15 @@ Heuristics with known ceilings:
     with what the assistant had just done (done claim, long reply, prose
     question, retraction, options, a run over 2 minutes, a tool error).
   * --tz defaults to this machine's zone.
+  * --sample-turns N: per ask category, up to N redacted human turns drawn
+    across all readable sessions (one per session per pass, single-turn
+    sessions skipped), plus N with frustration markers. Stdout only.
 
 Usage:
     python3 session_miner.py --out DIR [--projects-dir P] [--since-days N]
                              [--exclude ID ...] [--tz ZONE] [--include-programmatic]
                              [--weeks 12] [--notes FILE] [--self-test]
-                             [--discover] [--user-turns ID] [--no-codex]
+                             [--discover] [--user-turns ID] [--sample-turns N] [--no-codex]
                              [--no-cursor] [--no-opencode] [--no-other]
 
 Writes DIR/session_miner_output.json and DIR/session_miner_report.md.
@@ -1222,6 +1225,14 @@ def self_test():
     normal = [{"project": "app", "user_turns": 1, "tool_calls": 0, "subagent_tool_calls": 0, "assistant_turns": 1, "entrypoint": "cli"} for _ in range(3)]
     assert programmatic_projects(prog + normal) == {"evalproj"}
     assert ZoneInfo(local_tz_name())
+    sample = select_sample([
+        [("t", "show me the screenshot"), ("t", "show me the page"), ("t", "wtf!! not again")],
+        [("t", "show me the diff"), ("t", "please fix the build")],
+        [("t", "show me the artifact")],
+    ], 2)
+    assert [si for si, _t, _x in sample["show me"]] == [0, 1], sample["show me"]
+    assert len(sample["frustration"]) == 1 and len(sample["implement or fix"]) == 1, sample
+    assert redact_turn("key AKIAABCDEFGHIJKLMNOP   here", 700).startswith("key [redacted]") or "AKIA" not in redact_turn("token sk-abcdefghijklmnopqrstuvwxyz0123456789", 700)
     agg3 = aggregate([s3], tz, 1)
     assert agg3["frustration_msgs"] == 1 and agg3["agent"]["dispatches"] == 2 and agg3["messages_with_images"] == 1, agg3["agent"]
     rep3 = render_report(agg3, [r3], {"generated_at": "", "projects_dir": "", "session_files": 0, "skipped_files": 0, "since_days": None, "excludes": [], "first_start": None, "last_end": None, "scan_seconds": 0, "programmatic": {"projects": 1, "sessions": 10, "user_turns": 10, "tool_calls": 0, "included": False}}, "UTC")
@@ -1237,10 +1248,80 @@ SECRET_RE = re.compile(
 )
 
 
-def emit_turn(n, ts, text, max_chars):
+TURN_SINK = None
+
+
+def redact_turn(text, max_chars):
     red = " ".join(SECRET_RE.sub("[redacted]", text).split())
     tail = "..." if len(red) > max_chars else ""
-    print(f"{n:03d} {str(ts or '')[:16]} [{'; '.join(classify_asks(text))}] | {red[:max_chars]}{tail}")
+    return red[:max_chars] + tail
+
+
+def emit_turn(n, ts, text, max_chars):
+    if TURN_SINK is not None:
+        TURN_SINK.append((ts, text))
+        return
+    print(f"{n:03d} {str(ts or '')[:16]} [{'; '.join(classify_asks(text))}] | {redact_turn(text, max_chars)}")
+
+
+def select_sample(sessions_turns, per_category):
+    picked = defaultdict(list)
+    for si, turns in enumerate(sessions_turns):
+        seen = Counter()
+        for ts, text in turns:
+            cats = [classify_asks(text)[0]]
+            if any(rx.search(text) for rx in FRUSTRATION_RE):
+                cats.append("frustration")
+            for cat in cats:
+                picked[cat].append((seen[cat], si, ts, text))
+                seen[cat] += 1
+    out = {}
+    for cat, items in picked.items():
+        items.sort(key=lambda t: (t[0], t[1]))
+        out[cat] = [(si, ts, text) for _k, si, ts, text in items[:per_category]]
+    return out
+
+
+def sample_user_turns(projects_dir, per_category, max_chars, since_days, codex_dir=None, cursor_dir=None, opencode_dir=None):
+    global TURN_SINK
+    matches = find_sessions(projects_dir, "", codex_dir or os.path.expanduser("~/.codex"), cursor_dir or CURSOR_USER_DIR, opencode_dir or OPENCODE_DIR)
+    cutoff = time.time() - since_days * 86400 if since_days else None
+    ordered = []
+    for harness, ref in matches:
+        if isinstance(ref, str):
+            try:
+                mtime = os.path.getmtime(ref)
+            except OSError:
+                continue
+            if cutoff and mtime < cutoff:
+                continue
+            ordered.append((mtime, harness, ref))
+        else:
+            ordered.append((0, harness, ref))
+    ordered.sort(key=lambda t: -t[0])
+    printer = {"claude-code": print_claude_user_turns, "codex": print_codex_user_turns, "cursor": print_cursor_user_turns, "opencode": print_opencode_user_turns}
+    sessions_turns = []
+    scanned = 0
+    for _m, harness, ref in ordered:
+        TURN_SINK = []
+        try:
+            printer[harness](ref, max_chars)
+        except Exception:
+            TURN_SINK = None
+            continue
+        turns, TURN_SINK = TURN_SINK, None
+        scanned += 1
+        if len(turns) > 1:
+            sessions_turns.append(turns)
+    sample = select_sample(sessions_turns, per_category)
+    total = sum(len(t) for t in sessions_turns)
+    for cat in sorted(sample, key=lambda c: -len(sample[c])):
+        items = sample[cat]
+        print(f"\n## {cat}: {len(items)} of the turns in this category, from {len({si for si, _t, _x in items})} sessions\n")
+        for n, (si, ts, text) in enumerate(items, 1):
+            print(f"{n:03d} s{si:03d} {str(ts or '')[:16]} | {redact_turn(text, max_chars)}")
+    print(f"# sampled from {len(sessions_turns)} sessions with 2+ human turns ({scanned} scanned, {total} turns); redacted, stdout only, nothing saved", file=sys.stderr)
+    return 0
 
 
 def find_sessions(projects_dir, sid_prefix, codex_dir, cursor_dir, opencode_dir):
@@ -2309,7 +2390,9 @@ def main():
     ap.add_argument("--no-other", action="store_true", help="skip Pi, Droid, Gemini CLI, Amp, Copilot CLI, Goose, Hermes")
     ap.add_argument("--user-turns", metavar="SESSION_ID", default=None,
                     help="print one session's human turns (redacted) to stdout and exit; id prefix allowed")
-    ap.add_argument("--max-chars", type=int, default=700, help="truncate each printed turn (with --user-turns)")
+    ap.add_argument("--max-chars", type=int, default=700, help="truncate each printed turn (with --user-turns or --sample-turns)")
+    ap.add_argument("--sample-turns", metavar="N", type=int, default=None,
+                    help="stream up to N redacted human turns per ask category, drawn across all readable sessions (plus N with frustration markers), then exit")
     args = ap.parse_args()
     if args.self_test:
         self_test()
@@ -2318,6 +2401,8 @@ def main():
         return
     if args.user_turns:
         sys.exit(print_user_turns(args.projects_dir, args.user_turns, args.max_chars, args.codex_dir))
+    if args.sample_turns:
+        sys.exit(sample_user_turns(args.projects_dir, args.sample_turns, args.max_chars, args.since_days, args.codex_dir))
     if args.discover:
         discover_stores()
         return
