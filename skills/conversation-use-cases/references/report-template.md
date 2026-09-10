@@ -1,6 +1,6 @@
 # Conversation use-cases from my agent sessions
 
-Generated locally with `conversation-use-cases` on <YYYY-MM-DD>. Counts and one-line intents only; no message text, credentials, or names of other people. Section 8 is verbatim from me: my answers to four open questions, as I typed them.
+Generated locally with `conversation-use-cases` on <YYYY-MM-DD>. Counts and one-line intents only; no message text, credentials, or names of other people. Section 8 is verbatim from me: my answers to three open questions, as I typed them.
 
 ## Format
 
@@ -122,14 +122,13 @@ Nineteen rows, one per card in `references/use-cases.md`, ordered by evidence sh
 
 ## 8. In my own words (REQUIRED, verbatim from the interview)
 
-Four open questions, answered in free text. Nothing inferred; a skipped question stays empty.
+Three open questions, answered in free text. Nothing inferred; a skipped question stays empty.
 
 | # | Question | My answer |
 |---|---|---|
 | 1 | Think of the last time working with an agent annoyed you. What happened? | |
-| 2 | What do you find yourself asking the agent for again and again? | |
-| 3 | After the agent says it is done, what do you check or redo by hand, and why? | |
-| 4 | When you come back to a running agent after a break, what do you want to know first? | |
+| 2 | After the agent says it is done, what do you check or redo by hand, and why? | |
+| 3 | While the agent works, what do you keep having to find out for yourself? | |
 
 ## Privacy gate (all five must be true before sharing)
 
@@ -149,5 +148,5 @@ Four open questions, answered in free text. Nothing inferred; a skipped question
 - [ ] Section 3 has at most eight rows, each with primary, also matched and one intent line; `other` excluded
 - [ ] Section 6 rows all come from the derivation table in `use-cases.md`, ordered by share
 - [ ] Section 7 has nineteen rows in share order with the Gate column filled; every share names its denominator
-- [ ] Section 8 has the four questions with the answers verbatim; a skipped question stays empty
+- [ ] Section 8 has the three questions with the answers verbatim; a skipped question stays empty
 - [ ] Privacy gate ticked
