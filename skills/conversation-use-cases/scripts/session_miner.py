@@ -37,17 +37,27 @@ Heuristics with known ceilings:
   * agent_behaviors: assistant-side regex signals (done claims, done then probe, prose vs structured questions, blocked on user, retractions, options offered, long replies, retries after an error result, runs between human turns), reported under "Agent behaviors (assistant messages)".
   * asks: primary label is the first ASK_RE match, asks_all counts every
     match; categories added for unblock or manual step, locate deliverable,
-    trust check, steer mid-run, show me, conciseness; per-turn shape
-    features are bullet count (feedback batch at 3+ bullets, with or
-    without images) and resumption (30+ min after the previous human turn).
+    trust check, steer mid-run, show me, conciseness, nudge or retry (a
+    whole short turn), context hand-off, state or capability check, decide
+    or opine, address review comments, pr or git, scope or requirement;
+    per-turn shape features are bullet count (feedback batch at 3+ bullets,
+    with or without images) and resumption (30+ min after the previous
+    human turn).
+  * moments: in-session sequences that point at a use-case card (blind
+    wait, done not done, prose question then numbered answer, screenshot
+    loop, batch then correction, resumption then status ask, blocked then
+    unblock, repeated correction, frustrated after a long run or tool
+    error), each as occurrences and sessions, under aggregates.moments.
 
   * programmatic: a project where 80%+ of 10+ sessions are one-shot runs
     (at most one human turn, no tool calls, or an SDK entrypoint) is a
     harness; its sessions are excluded from every count unless
     --include-programmatic is given, and the exclusion is reported.
-  * frustration: human turns with an exasperation marker, counted together
-    with what the assistant had just done (done claim, long reply, prose
-    question, retraction, options, a run over 2 minutes, a tool error).
+  * frustration: human turns with an exasperation marker in their prose
+    (fenced code, JSON and log lines are stripped first, pasted agent
+    transcripts skipped), counted together with what the assistant had
+    just done (done claim, long reply, prose question, retraction,
+    options, a run over 2 minutes, a tool error).
   * --tz defaults to this machine's zone.
   * --sample-turns N: per ask category, up to N redacted human turns drawn
     across all readable sessions (one per session per pass, single-turn
@@ -95,25 +105,44 @@ SKIP_PREFIXES = (
 IMAGE_RE = re.compile(r"\[Image #\d+\]")
 ASK_RE = [
     ("steer mid-run", re.compile(r"\A\s*(wait|stop|hold on|pause|don'?t)\b|\b(hold on|before you|first do)\b", re.I)),
+    ("nudge or retry", re.compile(r"\A\W*(?:(?:please|pls|can you|could you|just|ok|okay|now)\W+){0,2}(?:(?:\w+\W+){0,2}again|retry|redo|re-?run(?:\W+it)?|reassess|resume|continue|go on|carry on|keep going|next|run it|do it)(?:\W+(?:please|pls|now|then|it|that))*\W*\Z", re.I)),
     ("trust check", re.compile(r"\b((how )?did you (actually|really|test|run|try|check|verify)|are you sure|is it really|did we|verify that|does ?n'?t work|does not work|still broken|not working)\b", re.I)),
     ("show me", re.compile(r"\b(show me|screenshots?|preview|let me see|mockups?)\b", re.I)),
-    ("locate deliverable", re.compile(r"\b(where is|where'?s|what('s| is) the (link|url)|give me the (url|link)|open it|where did you put|which file)\b", re.I)),
+    ("locate deliverable", re.compile(r"\b(where is|where'?s|what('s| is) the (link|url)|give me the (url|link)|open it|where did you put|which file|is (it|the pr|the branch|everything) (pushed|deployed|merged|published|live|released)|are (all |the )?prs? (ready|merged|open|green)|do we have (the|a|any) (branch|pr|link|build|release) (pushed|open|ready|up))\b", re.I)),
     ("unblock or manual step", re.compile(r"\b(done on my (side|end)|I (just )?did (it|that|this)|I (created|set ?up|installed|enabled|configured)|pasted|logged in|(I |we )?(approved|merged) (it|the|them)|unlocked|added the (key|token|secret)|here('s| is) the (token|key|url|link)|registered)\b", re.I)),
-    ("status or steering", re.compile(r"\b(progress|status|what('s| is| are we) missing|state of (our|the) work|where are we|have you|what do you need|continue|go on)\b", re.I)),
+    ("context hand-off", re.compile(r"\A\W*https?://\S+\W*\Z|\A# Files mentioned by the user|\b(here (are|is|'s) (the|my|a|an|some|what)|here you go|for (your )?(reference|context)|fyi|attached (is|are|file|below)|the (keys?|tokens?|creds?|credentials?|secrets?|env( vars?)?|variables?) (are|is) (set|there|in place|configured|ready)|I (use|run|am on|'m on) (nvm|pnpm|yarn|bun|node|docker|zsh|fish|brew|homebrew|macos|linux|windows|a mac))\b", re.I)),
+    ("state or capability check", re.compile(r"\b(are you (connected|able to|allowed to|running|using|aware|still (running|working|there))|do you (have access|know (which|what|where))|can you (see|access|reach|still)|which (model|version|branch|account|workspace) (are you|is this|am I|are we)|what can you do|is (it|the server|the app|everything|anything) (still )?(running|up|alive|connected)|what('s| is) running)\b|\A\W*(hi|hello|hey)\b", re.I)),
+    ("status or steering", re.compile(r"\b(progress|status|what('s| is| are we) missing|state of (our|the) work|where are we|have you|what do you need|continue|go on|what('s| is| has)? (changed|left|next|remaining|been done)|what did you (do|change)|is (it|everything) (ready|green|done)|are (all |the )?(tests|checks) (ready|green|passing))\b", re.I)),
     ("approve or hand back", re.compile(r"^\s*(yes|ok|okay|go ahead|approved|lgtm|proceed|merged|deployed|done)\b", re.I)),
-    ("answer questions", re.compile(r"(?m)^\s*(Q\d+|[A-D]\d*|\d+)\s*[:.)-]", re.I)),
+    ("answer questions", re.compile(r"(?m)^\s*(Q\d+|[A-D]\d*|\d+)\s*[:.)-]|\A\W*(go with|option|pick|choose|take|let'?s (do|go with))\s+[A-D]\b|\A\W*[A-D]\W*\Z", re.I)),
+    ("decide or opine", re.compile(r"\b(what would you (do|recommend|suggest|pick|choose|go with)|what do you (think|recommend|suggest)|your (call|recommendation|pick|choice)|you (decide|choose|pick)|up to you|I('d| would) (go|pick|choose|prefer)|I prefer|my preference|sounds good|makes sense|parece-me bem|faz sentido|I('m| am) (fine|ok|okay|happy) with|let'?s go with|agreed|fair enough)\b", re.I)),
     ("conciseness", re.compile(r"\b(concise|shorter|too long|tl;?dr|less text)\b", re.I)),
+    ("address review comments", re.compile(r"\b(address (the |all |those |these )?(comments|findings|feedback|review)|(comments|findings) (on|added to|left on|from) the pr|react to (the )?comments|resolve the (comments|threads|conversations))\b", re.I)),
     ("feedback or correction", re.compile(r"\b(no,|not what|wrong|instead|should have|I do not want|I don't want|remove|again|fix this|not great|not good)\b", re.I)),
+    ("pr or git", re.compile(r"\b(open (a |the |up a )?pr|pull requests?|prs?|commit (the|this|these|it|everything|changes|and push)|push (it|the|this|to|everything)|(create|open|switch to|checkout|delete) (a |the )?(new )?(branch|worktree)|rebase|merge (it|the pr|main|master|into)|squash|cherry-?pick|force[- ]push)\b", re.I)),
     ("implement or fix", re.compile(r"\b(implement|build|add|create|fix|refactor|migrate|update the code|write the code|make it work|feature|bug|failing)\b", re.I)),
     ("review or verify", re.compile(r"\b(review|verify|test it|check (the|that|if)|validate|audit|qa\b)", re.I)),
     ("plan or design", re.compile(r"\b(plan|design|brainstorm|architecture|spec|approach|options|tradeoffs?|grill)\b", re.I)),
     ("research or explain", re.compile(r"\b(research|investigate|explain|why (is|does|did)|how (does|do|is)|compare|find out|look into|what is)\b", re.I)),
-    ("docs or writing", re.compile(r"\b(doc|document|write up|write a|readme|notion page|article|summary|brief|report)\b", re.I)),
+    ("docs or writing", re.compile(r"\b(doc|document|write up|write a|readme|notion page|article|summary|summari[sz]e|recap|brief|report)\b", re.I)),
     ("analytics or data", re.compile(r"\b(sql|query|bigquery|dashboard|metric|conversion|funnel|chart|posthog|analytics)\b", re.I)),
     ("ops or deploy", re.compile(r"\b(deploy|release|tag|docker|server|restart|ci\b|pipeline|prod|cloudflare|vercel)\b", re.I)),
     ("comms or drafts", re.compile(r"\b(slack|message to|reply to|email|draft|announce|dm\b|post in)\b", re.I)),
     ("tickets or tracking", re.compile(r"\b(linear|issue|ticket|todo|task list|backlog)\b", re.I)),
+    ("scope or requirement", re.compile(r"\b(we (should|need to|also need to|must|want to|don'?t want to|do not want to|also want|should also|should not|shouldn'?t)|make sure|do not (care|need|worry|bother)|don'?t (care|need|worry|bother)|out of scope|not (now|yet|for now)|for now|leave (it|that|this) (for later|alone|as is)|skip (it|that|this)|only (do|change|touch|keep|for)|keep (it|them|the \w+) as (is|it is)|no need (to|for))\b", re.I)),
 ]
+UNBLOCK_REPLY_RE = re.compile(r"\A\W*(?:(?:ok|okay|yes|alright)\W+)?(done|merged|deployed|added|pasted|set|created|installed|approved|restarted|logged in|ran it|it'?s (there|set|done|in))\b", re.I)
+MOMENTS = (
+    ("blind_wait", "blind wait: run over 2 active minutes, then a status ask", "01, 10"),
+    ("done_not_done", "done not done: done claim, then a probe or correction within two turns", "03"),
+    ("prose_question_then_numbered_answer", "question in prose, then a numbered or lettered answer", "04"),
+    ("screenshot_loop", "screenshot loop: image, done claim, image again", "06"),
+    ("batch_then_correction", "feedback batch, then a correction within three turns", "07"),
+    ("resumption_then_status_ask", "resumption, then a status ask", "12"),
+    ("blocked_then_unblock", "blocked on user, then an unblock or manual step", "02"),
+    ("repeated_correction", "repeated correction or conciseness, 3 or more in one session", "05"),
+    ("frustrated_after_run_or_error", "frustrated turn after a long run or a tool error", "10, 01"),
+)
 
 
 def classify_asks(text):
@@ -147,7 +176,23 @@ FRUSTRATION_RE = [re.compile(pat, re.I) for pat in (
     r"\bfor the (second|third|2nd|3rd|nth|last) time\b", r"\bdon'?t ever\b", r"\bnever (do|add|change|touch) that again\b",
     r"\bare you (kidding|serious|listening|even)\b", r"\byou (keep|still|again) (doing|ignoring|adding|breaking|changing)\b",
     r"\bnot what I asked\b", r"\bunbelievable\b", r"\bI give up\b",
+    r"\bsucks?\b", r"\bbullshit\b", r"\?!|!\?", r"\b(no|stop)!", r"\bstill (broken|fucked|not working|the same)\b",
+    r"\bnot (addressing|listening to|reading|following) (my|what|the)\b",
 )]
+CODE_FENCE_RE = re.compile(r"```.*?```", re.S)
+PASTE_LINE_RE = re.compile(r'(?m)^[ \t]*(?:[{}\]"\'<>|#/\\]|\[\s*(?:[{\["\]]|$)|\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}|\d{2}:\d{2}:\d{2}|at \S+:\d+).*$')
+TRANSCRIPT_RE = re.compile(r"\[\d+\] (?:user|assistant|tool)\b|TRANSCRIPT DELTA|^\s*(?:user|assistant|human|ai):\s", re.M | re.I)
+
+
+def prose_only(text):
+    if TRANSCRIPT_RE.search(text):
+        return ""
+    return PASTE_LINE_RE.sub("", CODE_FENCE_RE.sub("", text))
+
+
+def is_frustrated(text):
+    prose = prose_only(text)
+    return any(rx.search(prose) for rx in FRUSTRATION_RE)
 PROGRAMMATIC_SHARE = 0.8
 PROGRAMMATIC_MIN_SESSIONS = 10
 PROGRAMMATIC_ENTRYPOINTS = ("sdk", "codex_exec", "codex_sdk")
@@ -311,6 +356,13 @@ class Session:
         self.run_prev_ts = None
         self.runs_tools = []
         self.runs_s = []
+        self.moments = Counter()
+        self.done_countdown = 0
+        self.batch_countdown = 0
+        self.blocked_countdown = 0
+        self.image_seen = False
+        self.done_since_image = False
+        self.density_turns = 0
 
     def run_touch(self, ts):
         self.run_open = True
@@ -365,6 +417,8 @@ class Session:
         if AGENT_RE["done_claims"].search(text[:200]):
             self.agent_sig["done_claims"] += 1
             self.pending_done = True
+            self.done_countdown = 2
+            self.done_since_image = self.image_seen
             flags.add("done_claim")
         if "?" in text and not structured and AGENT_RE["prose_questions"].search(text):
             self.agent_sig["prose_questions"] += 1
@@ -373,6 +427,8 @@ class Session:
             if AGENT_RE[k].search(text):
                 self.agent_sig[k] += 1
                 flags.add(k[:-1] if k == "retractions" else k)
+        if "blocked_on_user" in flags:
+            self.blocked_countdown = 2
         if len(OPTION_LINE_RE.findall(text)) >= 2 or len(LETTER_LINE_RE.findall(text)) >= 2 or (
                 {"1", "2"} <= set(NUMBERED_LINE_RE.findall(text)) and ALTERNATIVE_RE.search(text)):
             self.agent_sig["options_offered"] += 1
@@ -483,7 +539,10 @@ class Session:
         self.flush_msg()
         self.close_run(ts)
         self.error_tools.clear()
-        if self.pending_done and AGENT_RE["probe"].search(text):
+        flags, run_long, tool_error = self.last_asst_flags, self.last_run_long, self.last_tool_error
+        self.last_asst_flags, self.last_run_long, self.last_tool_error = set(), False, False
+        probe = bool(AGENT_RE["probe"].search(text))
+        if self.pending_done and probe:
             self.agent_sig["done_claim_then_probe"] += 1
         self.pending_done = False
         self.user_turns += 1
@@ -502,23 +561,22 @@ class Session:
         self.asks[labels[0]] += 1
         self.asks_all.update(labels)
         bullets = len(BULLET_RE.findall(text))
-        if any(rx.search(text) for rx in FRUSTRATION_RE):
+        frustrated = is_frustrated(text)
+        if frustrated:
             self.frustration += 1
             self.frustration_asks[labels[0]] += 1
-            for fl in self.last_asst_flags:
+            for fl in flags:
                 self.frustration_after[fl] += 1
-            if self.last_run_long:
+            if run_long:
                 self.frustration_after["long_run"] += 1
-            if self.last_tool_error:
+            if tool_error:
                 self.frustration_after["tool_error"] += 1
-            if not self.last_asst_flags and not self.last_run_long and not self.last_tool_error:
+            if not flags and not run_long and not tool_error:
                 self.frustration_after["nothing flagged"] += 1
-        self.last_asst_flags = set()
-        self.last_run_long = False
-        self.last_tool_error = False
         if bullets >= BATCH_MIN_BULLETS:
             self.batch_bullets.append(bullets)
             self.batches_with_images += 1 if images else 0
+        resumed = False
         if ts is not None:
             if self.turn_ts and ts > self.turn_ts[-1]:
                 gap = (ts - self.turn_ts[-1]).total_seconds()
@@ -526,6 +584,7 @@ class Session:
                 if gap >= RESUME_GAP_S:
                     self.resumptions += 1
                     self.resume_asks[labels[0]] += 1
+                    resumed = True
             self.turn_ts.append(ts)
             self.turn_hours[ts.astimezone(tz).hour] += 1
         if queued:
@@ -533,6 +592,7 @@ class Session:
         if self.last_assistant_block == "tool_use":
             self.steer += 1
         self.last_assistant_block = None
+        hits = set()
         for cat, pats in FEEDBACK_RE.items():
             hit = False
             total = 0
@@ -546,6 +606,43 @@ class Session:
                 hit = False
             if hit:
                 self.feedback[cat] += 1
+                hits.add(cat)
+        unblocked = "unblock or manual step" in labels or bool(UNBLOCK_REPLY_RE.match(text))
+        self.detect_moments(labels, flags, run_long, tool_error, probe, images, bullets, resumed, hits, frustrated, unblocked)
+
+    def detect_moments(self, labels, flags, run_long, tool_error, probe, images, bullets, resumed, hits, frustrated, unblocked):
+        m = self.moments
+        correction = "corrections" in hits or "feedback or correction" in labels
+        status = "status or steering" in labels or "status_asks" in hits
+        if run_long and status:
+            m["blind_wait"] += 1
+        if self.done_countdown > 0 and (probe or correction or "trust check" in labels):
+            m["done_not_done"] += 1
+            self.done_countdown = 0
+        self.done_countdown = max(0, self.done_countdown - 1)
+        if "prose_question" in flags and ("numbered_answers" in hits or "answer questions" in labels):
+            m["prose_question_then_numbered_answer"] += 1
+        if images:
+            if self.done_since_image:
+                m["screenshot_loop"] += 1
+            self.image_seen = True
+            self.done_since_image = False
+        if self.batch_countdown > 0 and correction:
+            m["batch_then_correction"] += 1
+            self.batch_countdown = 0
+        self.batch_countdown = max(0, self.batch_countdown - 1)
+        if bullets >= BATCH_MIN_BULLETS:
+            self.batch_countdown = 3
+        if resumed and status:
+            m["resumption_then_status_ask"] += 1
+        if self.blocked_countdown > 0 and unblocked:
+            m["blocked_then_unblock"] += 1
+            self.blocked_countdown = 0
+        self.blocked_countdown = max(0, self.blocked_countdown - 1)
+        if correction or "conciseness" in labels:
+            self.density_turns += 1
+        if frustrated and (run_long or tool_error):
+            m["frustrated_after_run_or_error"] += 1
 
     def assistant_turn(self, ts, msg_id, had_tool):
         self.assistant_msgs.add(msg_id)
@@ -574,6 +671,8 @@ class Session:
         dur = (self.end - self.start).total_seconds() / 60 if self.start and self.end else None
         gaps = self.gaps()
         run_s = self.run_stats()[1]
+        if self.density_turns >= 3:
+            self.moments["repeated_correction"] = self.density_turns
         return {
             "session_id": self.session_id,
             "harness": self.harness,
@@ -625,6 +724,7 @@ class Session:
             "frustration_msgs": self.frustration,
             "frustration_after": dict(self.frustration_after.most_common()),
             "frustration_asks": dict(self.frustration_asks.most_common()),
+            "moments": dict(self.moments.most_common()),
             "models": dict(self.models.most_common(5)),
             "permission_modes": dict(self.permission_modes.most_common(5)),
             "agent_behaviors": {
@@ -767,6 +867,7 @@ def aggregate(sessions, tz, weeks):
     per_harness, models, perms, asks = Counter(), Counter(), Counter(), Counter()
     asks_all, resume_asks, batch_bullets = Counter(), Counter(), []
     frustration_after, frustration_asks = Counter(), Counter()
+    moments, moment_sessions = Counter(), Counter()
     resumptions = batches_with_images = 0
     longest_gap = 0.0
     tools, sub_tools, mcp, skills, agent_types = Counter(), Counter(), Counter(), Counter(), Counter()
@@ -776,6 +877,7 @@ def aggregate(sessions, tz, weeks):
     agent_sig, agent_by_harness, asst_lens, run_tools, run_s = Counter(), defaultdict(Counter), [], [], []
     hours_start, hours_turns, weekly, per_project, per_entry = Counter(), Counter(), Counter(), Counter(), Counter()
     dead_starts = 0
+    turns_per_session = []
     now = datetime.now(timezone.utc).astimezone(tz)
     this_monday = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
     week_starts = [this_monday - timedelta(weeks=k) for k in range(weeks - 1, -1, -1)]
@@ -794,6 +896,8 @@ def aggregate(sessions, tz, weeks):
         resume_asks.update(s.resume_asks)
         frustration_after.update(s.frustration_after)
         frustration_asks.update(s.frustration_asks)
+        moments.update(r["moments"])
+        moment_sessions.update(r["moments"].keys())
         resumptions += s.resumptions
         batch_bullets.extend(s.batch_bullets)
         batches_with_images += s.batches_with_images
@@ -823,6 +927,8 @@ def aggregate(sessions, tz, weeks):
         per_entry[r["entrypoint"] or "(unknown)"] += 1
         actives.append(r["active_min"])
         dead_starts += 1 if r["user_turns"] and not r["assistant_turns"] else 0
+        if r["user_turns"]:
+            turns_per_session.append(r["user_turns"])
         if r["duration_min"] is not None:
             durations.append(r["duration_min"])
         if s.start:
@@ -841,6 +947,7 @@ def aggregate(sessions, tz, weeks):
         "resumption_asks": dict(resume_asks.most_common()),
         "frustration_after": dict(frustration_after.most_common()),
         "frustration_asks": dict(frustration_asks.most_common()),
+        "moments": {key: {"occurrences": moments.get(key, 0), "sessions": moment_sessions.get(key, 0), "cards": cards} for key, _label, cards in MOMENTS},
         "feedback_batches": len(batch_bullets),
         "feedback_batch_bullets": {"median": pct(batch_bullets, 50), "max": max(batch_bullets, default=0)},
         "feedback_batches_with_images": batches_with_images,
@@ -893,6 +1000,8 @@ def aggregate(sessions, tz, weeks):
                            for h, c in sorted(agent_by_harness.items())},
         },
         "weekly_sessions": {ws.date().isoformat(): weekly.get(ws.date().isoformat(), 0) for ws in week_starts},
+        "user_turns_per_session": {"median": pct(turns_per_session, 50), "p90": pct(turns_per_session, 90)},
+        "sessions_per_week_median": pct([weekly.get(ws.date().isoformat(), 0) for ws in week_starts if weekly.get(ws.date().isoformat(), 0)], 50),
         "sessions_by_hour": {h: hours_start.get(h, 0) for h in range(24)},
         "user_turns_by_hour": {h: hours_turns.get(h, 0) for h in range(24)},
     })
@@ -948,6 +1057,8 @@ def render_report(agg, rows, scope, tz_name, parity=None):
     L.append(md_table(["metric", "value"], [
         ("sessions", agg["sessions"]),
         ("human user turns", agg["user_turns"]),
+        ("human turns per session with at least one turn: median / p90", f"{agg['user_turns_per_session']['median']} / {agg['user_turns_per_session']['p90']}"),
+        ("sessions per week, median over weeks with sessions", agg["sessions_per_week_median"]),
         ("assistant messages (main thread)", agg["assistant_turns"]),
         ("tool calls (main thread)", agg["tool_calls"]),
         ("tool calls (subagents)", agg["subagent_tool_calls"]),
@@ -1038,6 +1149,11 @@ def render_report(agg, rows, scope, tz_name, parity=None):
     L.append("\nPer harness: " + "; ".join(
         f"{h}: text signals {'measured' if c['assistant_text_msgs'] else 'not measured'}, retries {'measured' if c['tool_results'] else 'not measured'}"
         for h, c in ab["by_harness"].items()) + "\n")
+    L.append("\n## Moments that point at a use-case\n")
+    L.append("Sequences inside one session, counted as occurrences and as sessions where they occurred. Card numbers follow design/use-cases/README.md.\n")
+    L.append(md_table(["moment", "occurrences", "sessions", "use-case card(s)"], [
+        (label, agg["moments"][key]["occurrences"], agg["moments"][key]["sessions"], cards) for key, label, cards in MOMENTS
+    ]))
     L.append("\n## Feedback signals (human messages)\n")
     L.append("Messages matching at least one marker per category:\n")
     L.append(counter_table(agg["feedback_messages"], "category", "messages"))
@@ -1184,6 +1300,21 @@ def self_test():
     assert classify_ask("be more concise, this is too long") == "conciseness"
     assert classify_ask("What is the progress? Please be concise.") == "status or steering"
     assert classify_ask("please don't add comments") == "implement or fix"
+    assert classify_ask("Try again") == "nudge or retry" and classify_ask("continue") == "nudge or retry" and classify_ask("Check again please") == "nudge or retry"
+    assert classify_ask("continue with the plan and report progress") == "status or steering" and classify_ask("proceed") == "approve or hand back"
+    assert classify_ask("A") == "answer questions" and classify_ask("Go with A. We need the whole plan first") == "answer questions"
+    assert classify_ask("https://example.com/x/y") == "context hand-off" and classify_ask("the keys are set, trigger the job") == "context hand-off"
+    assert classify_ask("Are you connected to GitHub?") == "state or capability check" and classify_ask("Hello, what can you do here?") == "state or capability check"
+    assert classify_ask("what changed since yesterday?") == "status or steering" and classify_ask("Are all PRs ready to be merged?") == "locate deliverable"
+    assert classify_ask("What would you do?") == "decide or opine" and classify_ask("sounds good, make sure it is published") == "decide or opine"
+    assert classify_ask("Address the comments on the PR please") == "address review comments" and classify_ask("Let's address the findings!") == "address review comments"
+    assert classify_ask("Open a PR with the fixes please") == "pr or git" and classify_ask("Commit the changes, then switch to master") == "pr or git"
+    assert classify_ask("Now summarise each of the three in one line.") == "docs or writing"
+    assert classify_ask("We need to make sure that we include the desktop app") == "scope or requirement"
+    assert classify_ask("We should definitely remove everything that is legacy") == "feedback or correction"
+    assert is_frustrated("this UX sucks, fix it") and is_frustrated("No! keep the webhook") and is_frustrated("specs are committed!?")
+    assert not is_frustrated("[3] user: I told you\n[4] assistant: ok") and not is_frustrated("```\nif (!!x) {}\n```\nlooks fine")
+    assert not is_frustrated('{"a": "wtf"}\nplease check') and is_frustrated("[Image #2] wtf, still wrong")
     s2 = Session("t2", "p")
     t2 = "2026-01-05T{}Z"
     scan_lines([json.dumps(e) for e in [
@@ -1225,6 +1356,9 @@ def self_test():
     normal = [{"project": "app", "user_turns": 1, "tool_calls": 0, "subagent_tool_calls": 0, "assistant_turns": 1, "entrypoint": "cli"} for _ in range(3)]
     assert programmatic_projects(prog + normal) == {"evalproj"}
     assert ZoneInfo(local_tz_name())
+    assert looks_like_brief("You are reviewing a repo. Do this.") and looks_like_brief("# A\n# B\n# C\nbody") and looks_like_brief("x" * 3001)
+    assert not looks_like_brief("show me the screenshot please") and not looks_like_brief("- a\n- b\n- c")
+    assert turn_epoch("2026-01-05T10:00:00Z") == datetime(2026, 1, 5, 10, tzinfo=timezone.utc).timestamp() and turn_epoch(None) is None
     sample = select_sample([
         [("t", "show me the screenshot"), ("t", "show me the page"), ("t", "wtf!! not again")],
         [("t", "show me the diff"), ("t", "please fix the build")],
@@ -1237,7 +1371,46 @@ def self_test():
     assert agg3["frustration_msgs"] == 1 and agg3["agent"]["dispatches"] == 2 and agg3["messages_with_images"] == 1, agg3["agent"]
     rep3 = render_report(agg3, [r3], {"generated_at": "", "projects_dir": "", "session_files": 0, "skipped_files": 0, "since_days": None, "excludes": [], "first_start": None, "last_end": None, "scan_seconds": 0, "programmatic": {"projects": 1, "sessions": 10, "user_turns": 10, "tool_calls": 0, "included": False}}, "UTC")
     assert "Frustration signals" in rep3 and "10 sessions, 10 human turns, 1 project(s); excluded" in rep3
+    assert r3["moments"] == {"done_not_done": 1, "batch_then_correction": 1}, r3["moments"]
     assert s.models == Counter({"claude-x": 1})
+    s4 = Session("t4", "p")
+    t4 = "2026-01-07T{}Z"
+    tool = lambda mid, tid, at: {"type": "assistant", "timestamp": t4.format(at), "message": {"id": mid, "content": [{"type": "tool_use", "id": tid, "name": "Bash", "input": {"command": "pnpm test"}}]}}
+    result = lambda tid, at, err=False: {"type": "user", "timestamp": t4.format(at), "message": {"content": [{"type": "tool_result", "tool_use_id": tid, "is_error": err, "content": "x"}]}}
+    say = lambda mid, at, text: {"type": "assistant", "timestamp": t4.format(at), "message": {"id": mid, "content": [{"type": "text", "text": text}]}}
+    ask = lambda at, text, image=False: {"type": "user", "timestamp": t4.format(at), "message": {"content": [{"type": "text", "text": text}] + ([{"type": "image"}] if image else [])}}
+    scan_lines([json.dumps(e) for e in [
+        ask("09:00:00", "please fix it"),
+        tool("f1", "e1", "09:00:10"), result("e1", "09:00:10"),
+        tool("f2", "e2", "09:03:00"), result("e2", "09:03:00"),
+        say("f3", "09:03:10", "Done, fixed."),
+        ask("09:04:00", "what's the status? is it really working?"),
+        say("f4", "09:04:30", "Should I also update the docs? Let me know."),
+        ask("09:05:00", "1. yes\n2. no"),
+        ask("09:06:00", "see [Image #1]", image=True),
+        say("f5", "09:06:30", "Done."),
+        ask("09:07:00", "[Image #2] still wrong", image=True),
+        ask("09:08:00", "- a\n- b\n- c"),
+        say("f6", "09:08:30", "ok"),
+        ask("09:09:00", "no, wrong"),
+        say("f7", "09:09:30", "You need to run the migration manually."),
+        ask("09:10:00", "done on my side, I added the key"),
+        ask("09:41:00", "where are we?"),
+        tool("f8", "e3", "09:41:30"), result("e3", "09:41:30", err=True),
+        say("f9", "09:41:40", "Hmm."),
+        ask("09:42:00", "wtf!! this sucks"),
+        ask("09:43:00", "too long, be more concise"),
+    ]], s4, tz, False)
+    r4 = s4.row()
+    assert r4["moments"] == {"done_not_done": 2, "repeated_correction": 3, "blind_wait": 1, "prose_question_then_numbered_answer": 1, "screenshot_loop": 1,
+                             "batch_then_correction": 1, "resumption_then_status_ask": 1, "blocked_then_unblock": 1, "frustrated_after_run_or_error": 1}, r4["moments"]
+    assert r4["frustration_msgs"] == 1 and r4["frustration_after"] == {"tool_error": 1} and r4["agent_behaviors"]["long_runs_over_2min"] == 1, r4
+    agg4 = aggregate([s4, s3], tz, 1)
+    assert agg4["moments"]["done_not_done"] == {"occurrences": 3, "sessions": 2, "cards": "03"}, agg4["moments"]
+    assert agg4["moments"]["blind_wait"] == {"occurrences": 1, "sessions": 1, "cards": "01, 10"} and agg4["moments"]["repeated_correction"]["occurrences"] == 3, agg4["moments"]
+    rep4 = render_report(agg4, [r4, r3], scope, "UTC")
+    assert rep4.index("## Agent behaviors (assistant messages)") < rep4.index("## Moments that point at a use-case") < rep4.index("## Feedback signals (human messages)")
+    assert "| blind wait: run over 2 active minutes, then a status ask | 1 | 1 | 01, 10 |" in rep4
     print("self-test ok")
 
 
@@ -1270,7 +1443,7 @@ def select_sample(sessions_turns, per_category):
         seen = Counter()
         for ts, text in turns:
             cats = [classify_asks(text)[0]]
-            if any(rx.search(text) for rx in FRUSTRATION_RE):
+            if is_frustrated(text):
                 cats.append("frustration")
             for cat in cats:
                 picked[cat].append((seen[cat], si, ts, text))
@@ -1282,9 +1455,30 @@ def select_sample(sessions_turns, per_category):
     return out
 
 
-def sample_user_turns(projects_dir, per_category, max_chars, since_days, codex_dir=None, cursor_dir=None, opencode_dir=None):
+BRIEF_MAX_CHARS = 3000
+BRIEF_OPENERS = ("you are ", "read and follow", "your task", "## ", "# ")
+
+
+def turn_epoch(ts):
+    if isinstance(ts, datetime):
+        return ts.timestamp()
+    d = parse_ts(str(ts)) if ts else None
+    return d.timestamp() if d else None
+
+
+def looks_like_brief(text):
+    if len(text) > BRIEF_MAX_CHARS:
+        return True
+    if sum(1 for line in text.splitlines() if line.lstrip().startswith("#")) >= 3:
+        return True
+    if text.lstrip().lower().startswith(BRIEF_OPENERS):
+        return True
+    return bool(TRANSCRIPT_RE.search(text))
+
+
+def sample_user_turns(projects_dir, per_category, max_chars, since_days, codex_dir=None, cursor_dir=None, opencode_dir=None, skip_harnesses=()):
     global TURN_SINK
-    matches = find_sessions(projects_dir, "", codex_dir or os.path.expanduser("~/.codex"), cursor_dir or CURSOR_USER_DIR, opencode_dir or OPENCODE_DIR)
+    matches = [(h, r) for h, r in find_sessions(projects_dir, "", codex_dir or os.path.expanduser("~/.codex"), cursor_dir or CURSOR_USER_DIR, opencode_dir or OPENCODE_DIR) if h not in skip_harnesses]
     cutoff = time.time() - since_days * 86400 if since_days else None
     ordered = []
     for harness, ref in matches:
@@ -1302,6 +1496,7 @@ def sample_user_turns(projects_dir, per_category, max_chars, since_days, codex_d
     printer = {"claude-code": print_claude_user_turns, "codex": print_codex_user_turns, "cursor": print_cursor_user_turns, "opencode": print_opencode_user_turns}
     sessions_turns = []
     scanned = 0
+    skipped_briefs = 0
     for _m, harness, ref in ordered:
         TURN_SINK = []
         try:
@@ -1311,8 +1506,12 @@ def sample_user_turns(projects_dir, per_category, max_chars, since_days, codex_d
             continue
         turns, TURN_SINK = TURN_SINK, None
         scanned += 1
-        if len(turns) > 1:
-            sessions_turns.append(turns)
+        if cutoff:
+            turns = [(ts, text) for ts, text in turns if (turn_epoch(ts) or cutoff) >= cutoff]
+        kept = [(ts, text) for ts, text in turns if not looks_like_brief(text)]
+        skipped_briefs += len(turns) - len(kept)
+        if len(kept) > 1:
+            sessions_turns.append(kept)
     sample = select_sample(sessions_turns, per_category)
     total = sum(len(t) for t in sessions_turns)
     for cat in sorted(sample, key=lambda c: -len(sample[c])):
@@ -1320,7 +1519,7 @@ def sample_user_turns(projects_dir, per_category, max_chars, since_days, codex_d
         print(f"\n## {cat}: {len(items)} of the turns in this category, from {len({si for si, _t, _x in items})} sessions\n")
         for n, (si, ts, text) in enumerate(items, 1):
             print(f"{n:03d} s{si:03d} {str(ts or '')[:16]} | {redact_turn(text, max_chars)}")
-    print(f"# sampled from {len(sessions_turns)} sessions with 2+ human turns ({scanned} scanned, {total} turns); redacted, stdout only, nothing saved", file=sys.stderr)
+    print(f"# sampled from {len(sessions_turns)} sessions with 2+ human turns ({scanned} scanned, {total} turns kept, {skipped_briefs} turns skipped as briefs, pasted transcripts or boilerplate); redacted, stdout only, nothing saved", file=sys.stderr)
     return 0
 
 
@@ -1525,10 +1724,9 @@ def scan_codex_file(path, tz):
             if key in seen:
                 continue
             seen.add(key)
-            if isinstance(pl.get("content"), list):
-                sess.pasted_images += sum(1 for b in pl["content"] if isinstance(b, dict) and b.get("type") == "input_image")
+            images = sum(1 for b in pl["content"] if isinstance(b, dict) and b.get("type") == "input_image") if isinstance(pl.get("content"), list) else 0
             sess.touch(ts)
-            sess.human_turn(text, ts, tz)
+            sess.human_turn(text, ts, tz, images=images)
             continue
         atext = codex_assistant_text(ev)
         if atext is not None:
@@ -1779,9 +1977,9 @@ def scan_cursor(since_days, tz, user_dir=CURSOR_USER_DIR):
                 if text is None:
                     sess.skipped_user_events += bool(bub.get("isSimulatedMsg"))
                     continue
-                sess.pasted_images += len((bub.get("context") or {}).get("selectedImages") or [])
+                images = len((bub.get("context") or {}).get("selectedImages") or [])
                 sess.touch(ts)
-                sess.human_turn(text, ts, tz)
+                sess.human_turn(text, ts, tz, images=images)
             elif bub.get("type") == 2:
                 tf = bub.get("toolFormerData")
                 if tf:
@@ -1885,10 +2083,12 @@ def scan_opencode(since_days, tz, root=OPENCODE_DIR):
                         sess.sub_tool_calls.update(str(p.get("tool") or "(unnamed)")[:60] for p in ps if p.get("type") == "tool")
                 elif m.get("role") == "user":
                     text = opencode_user_text(ps)
+                    images = sum(1 for p in ps if p.get("type") == "file" and str(p.get("mime") or "").startswith("image/"))
                     if text.strip():
                         sess.touch(ts)
-                        sess.human_turn(text, ts, tz)
-                    sess.pasted_images += sum(1 for p in ps if p.get("type") == "file" and str(p.get("mime") or "").startswith("image/"))
+                        sess.human_turn(text, ts, tz, images=images)
+                    else:
+                        sess.pasted_images += images
                     mdl = m.get("model") or {}
                     if mdl.get("modelID"):
                         sess.models[str(mdl["modelID"])[:40]] += 1
@@ -2402,7 +2602,8 @@ def main():
     if args.user_turns:
         sys.exit(print_user_turns(args.projects_dir, args.user_turns, args.max_chars, args.codex_dir))
     if args.sample_turns:
-        sys.exit(sample_user_turns(args.projects_dir, args.sample_turns, args.max_chars, args.since_days, args.codex_dir))
+        skip = tuple(h for h, off in (("codex", args.no_codex), ("cursor", args.no_cursor), ("opencode", args.no_opencode)) if off)
+        sys.exit(sample_user_turns(args.projects_dir, args.sample_turns, args.max_chars, args.since_days, args.codex_dir, skip_harnesses=skip))
     if args.discover:
         discover_stores()
         return
