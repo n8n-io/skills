@@ -4,25 +4,11 @@ Nineteen cards. Cards 1 to 12 come from the first study; 13 to 19 are the lower-
 
 ## Rules
 
-- A card's Gate fires when its condition holds on this person's report. Gates are shares of a denominator or minimum counts, never bare `> 0`, so a heavy history does not fire every card. A card also fires when a moment that points at it has 3 or more occurrences in the Moments table. Cards whose gate does not fire are `not asked`.
-- The pick questions offer at most twelve fired cards: the top twelve by evidence share. Fired cards outside the twelve are `not offered`. Three multi-select questions of four cards, then one first-pick question; the interview stays at ten questions.
-- A metric whose parity signal reads `not measured`, `store absent on this machine` or `skipped by flag` for every harness with sessions in range is `not measured`. A gate with every metric `not measured` does not fire and the card is `not asked (not measured)`. A gate with at least one measured metric is evaluated on the measured metrics alone.
-- Evidence share = the first metric in the Evidence column divided by the card's denominator, written `N of D <denominator> (P%)`. Section 7 ranks within each Fit group by this share, largest first; ties by card number.
-- Fit values: `picked (first)`, `picked`, `not picked`, `hard to imagine` (typed by the person, ranks with not picked), `not offered`, `not asked`, `not asked (not measured)`.
-
-## Short labels for the pick questions
-
-AskUserQuestion option labels hold one to five words; the card name goes in the description with the Picture line.
-
-| # | Short label | # | Short label | # | Short label |
-|---|---|---|---|---|---|
-| 1 | Run board | 8 | Draft composer | 15 | Parallel attempts |
-| 2 | Needs-you list | 9 | Errand tracker | 16 | Deliverable locator |
-| 3 | Verification board | 10 | Long-run console | 17 | Option picker |
-| 4 | Decision form | 11 | Analytics workbench | 18 | Consequential gate |
-| 5 | Living plan | 12 | Return brief | 19 | Meeting companion |
-| 6 | Screenshot pins | 13 | Findings board | | |
-| 7 | Feedback triage | 14 | Validation register | | |
+- A card's Gate fires when its condition holds on this person's report. Gates are shares of a denominator or minimum counts, never bare `> 0`, so a heavy history does not fire every card. A card also fires when a moment that points at it has 3 or more occurrences in the Moments table. Cards whose gate does not fire are `not fired`.
+- The interview never mentions cards. Section 7 of the report is derived from the report alone and says so; cards are confirmed, refuted or added in the cross-person assessment.
+- A metric whose parity signal reads `not measured`, `store absent on this machine` or `skipped by flag` for every harness with sessions in range is `not measured`. A gate with every metric `not measured` does not fire and the card is `not measured`. A gate with at least one measured metric is evaluated on the measured metrics alone.
+- Evidence share = the first metric in the Evidence column divided by the card's denominator, written `N of D <denominator> (P%)`. Section 7 ranks by this share, largest first; ties by card number.
+- Gate values in section 7: `fired`, `not fired`, `not measured`.
 
 ## Metric dictionary
 
@@ -103,7 +89,7 @@ The first metric in the Evidence column is the ranking metric; it is on the same
 
 ## Pictures, denominators and the chat contrast
 
-The Picture line is the option description in the pick question; the "In chat today" line goes into the question text when it fits. The denominator turns the ranking metric into the evidence share.
+The Picture and "In chat today" lines describe each card for readers and for the cross-person assessment; they are never shown to the person during the interview. The denominator turns the ranking metric into the evidence share.
 
 | # | Picture (what is on screen) | In chat today | Denominator |
 |---|---|---|---|
