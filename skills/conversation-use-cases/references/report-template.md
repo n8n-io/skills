@@ -1,6 +1,6 @@
 # Conversation use-cases from my agent sessions
 
-Generated locally with `conversation-use-cases` on <YYYY-MM-DD>. Counts and one-line intents only; no message text, credentials, or names of other people. Section 8 is verbatim from me: my answers to three open questions, as I typed them.
+Generated locally with `conversation-use-cases` on <YYYY-MM-DD>. Counts and one-line intents only; no message text, credentials, or names of other people. Section 8 is verbatim from me: my answers to four open questions, as I typed them.
 
 ## Format
 
@@ -122,13 +122,14 @@ Nineteen rows, one per card in `references/use-cases.md`, ordered by evidence sh
 
 ## 8. In my own words (REQUIRED, verbatim from the interview)
 
-Three open questions, answered in free text. Nothing inferred; a skipped question stays empty.
+Four open questions, answered in free text; when a probe was asked, its answer follows the first in the same cell. Nothing inferred; a skipped question stays empty.
 
 | # | Question | My answer |
 |---|---|---|
 | 1 | Think of the last time working with an agent annoyed you. What happened? | |
 | 2 | After the agent says it is done, what do you check or redo by hand, and why? | |
 | 3 | While the agent works, what do you keep having to find out for yourself? | |
+| 4 | When the agent went off from what you asked, how did you notice, and how late? | |
 
 ## Privacy gate (all five must be true before sharing)
 
@@ -148,5 +149,5 @@ Three open questions, answered in free text. Nothing inferred; a skipped questio
 - [ ] Section 3 has at most eight rows, each with primary, also matched and one intent line; `other` excluded
 - [ ] Section 6 rows all come from the derivation table in `use-cases.md`, ordered by share
 - [ ] Section 7 has nineteen rows in share order with the Gate column filled; every share names its denominator
-- [ ] Section 8 has the three questions with the answers verbatim; a skipped question stays empty
+- [ ] Section 8 has the four questions with the answers verbatim; a skipped question stays empty
 - [ ] Privacy gate ticked
