@@ -23,7 +23,7 @@ Ranking in section 7 of the template orders by Fit first, then by evidence share
 
 ## Pictures, denominators and the chat contrast
 
-Read the Picture and the "In chat today" line into the Fit question so the person can imagine the card. The denominator turns the evidence count into a share for section 7.
+The Picture line is the option description in the pick question, so the person can imagine the card; the "In chat today" line goes into the question text when it fits. The denominator turns the evidence count into a share for section 7.
 
 | # | Picture (what is on screen) | In chat today | Denominator |
 |---|---|---|---|

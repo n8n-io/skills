@@ -1,6 +1,6 @@
 # Conversation use-cases from my agent sessions
 
-Generated locally with `conversation-use-cases` on <YYYY-MM-DD>. Numbers come from `session_miner_output.json`; a metric the parity table marks not measured, store absent or skipped by flag is written as `not measured`, never 0. Intents are described in my words; no message text, credentials, or names of other people are in this file. Section 8 (8a, 8b, 8c) is verbatim from me: the options I chose and the free text I typed, as I gave them.
+Generated locally with `conversation-use-cases` on <YYYY-MM-DD>. Numbers come from `session_miner_output.json`; a metric the parity table marks not measured, store absent or skipped by flag is written as `not measured`, never 0. Intents are described in my words; no message text, credentials, or names of other people are in this file. Section 8 (8a, 8b) is verbatim from me: the options I chose and the free text I typed, as I gave them.
 
 ## 0. Harnesses found (REQUIRED)
 
@@ -81,9 +81,9 @@ Ranked. Each item: the moment, the metric that shows it, the count.
 
 ## 7. Ranked use-cases where UI beats chat (REQUIRED)
 
-Cards come from `references/use-cases.md`. Order by Fit from 8c first: fits, sometimes, hard to imagine, no, then not asked. Within the same Fit, order by evidence share: the evidence count divided by the denominator named for that card in `use-cases.md` (human turns, sessions or main-thread tool calls), written as a percentage with its denominator. Counts on different scales are never compared to each other.
+Cards come from `references/use-cases.md`. Order: picked cards first with the person's first pick on top, then not picked, then not asked. Within each group, order by evidence share: the evidence count divided by the denominator named for that card in `use-cases.md` (human turns, sessions or main-thread tool calls), written as a percentage with its denominator. Counts on different scales are never compared to each other.
 
-| # | Use-case | Intent served | Trigger | Shows | You can | Evidence (metric, count) | Fit (8c) | Evidence share | Beats text because |
+| # | Use-case | Intent served | Trigger | Shows | You can | Evidence (metric, count) | Fit (8b) | Evidence share | Beats text because |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | | | | | | | | | |
 | 2 | | | | | | | | | |
@@ -93,27 +93,20 @@ Cards come from `references/use-cases.md`. Order by Fit from 8c first: fits, som
 
 Chosen options and free text recorded as given. Nothing inferred.
 
-### 8a. Core (always asked)
+### 8a. How I work (six questions, always asked)
 
-1. What do you check most often that the agent should just show you?
-2. Which feedback do you find yourself repeating?
-3. Where would you rather click than type?
-4. What do you wish you could see while the agent works?
-5. What would make you trust "done"?
+1. What do you most often have to ask for that the agent should just show you?
+2. What bothers you most when working with agents?
+3. What would make you trust "done", and what do you not trust the agent to report?
+4. What do you still do by hand, or have taken back from the agent, and why?
+5. Where would you rather click than type?
+6. What must stay yours to approve or do?
 
-### 8b. Issues and concerns (always asked)
+### 8b. Use-case picks (cards whose gate in `references/use-cases.md` fired, offered four per question)
 
-1. What bothers you most when working with agents?
-2. Is there anything you used to hand to the agent and now do yourself again? Why?
-3. What do you still do by hand because the agent gets it wrong?
-4. What do you not trust the agent to report?
-5. What should never be automated for you?
+Fit is one of: picked, not picked, not asked, hard to imagine (typed by the person).
 
-### 8c. Use-case cards (asked when the gate in `references/use-cases.md` fires)
-
-Fit is one of: fits, sometimes, no, hard to imagine (the person could not judge without seeing it), not asked.
-
-| # | Use-case | Fit | What it must show | What you would click |
+| # | Use-case | Fit | First pick | What it must show (free text) |
 |---|---|---|---|---|
 | 1 | Live run board | | | |
 | 2 | Needs-you panel with one-click unblocks | | | |
