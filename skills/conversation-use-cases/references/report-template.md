@@ -1,6 +1,6 @@
 # Conversation use-cases from my agent sessions
 
-Generated locally with `conversation-use-cases` on <YYYY-MM-DD>. Counts and one-line intents only; no message text, credentials, or names of other people. Section 8 is verbatim from me: the options I chose and the free text I typed, as I gave them.
+Generated locally with `conversation-use-cases` on <YYYY-MM-DD>. Counts and one-line intents only; no message text, credentials, or names of other people. Section 8 is verbatim from me: my answers to four open questions, as I typed them.
 
 ## Format
 
@@ -112,54 +112,24 @@ Rows come from the derivation table in `references/use-cases.md`: every breakdow
 |---|---|---|---|
 | | | N of D <denominator> (P%) | |
 
-## 7. Ranked use-cases where UI beats chat (REQUIRED)
+## 7. Use-cases the data points at (REQUIRED, derived, not my rating)
 
-Nineteen rows, one per card in `references/use-cases.md`. Order: `picked (first)`, then `picked`, `not picked` (with `hard to imagine`), `not offered`, `not asked`. Within a group by evidence share, largest first; ties by card number.
+Nineteen rows, one per card in `references/use-cases.md`, ordered by evidence share, largest first; ties by card number. Gate says whether the card's condition holds on my report. Nobody asked me to rate these cards; my words are in section 8.
 
-| Rank | # | Use-case | Fit | Evidence metric | Evidence share |
+| Rank | # | Use-case | Gate | Evidence metric | Evidence share |
 |---|---|---|---|---|---|
-| 1 | | | | | N of D <denominator> (P%) |
+| 1 | | | fired / not fired / not measured | | N of D <denominator> (P%) |
 
 ## 8. In my own words (REQUIRED, verbatim from the interview)
 
-Chosen options and free text as given. Nothing inferred; an unanswered question stays empty.
+Four open questions, answered in free text. Nothing inferred; a skipped question stays empty.
 
-### 8a. How I work (six questions, always asked)
-
-| # | Question | Chosen options | Free text |
-|---|---|---|---|
-| 1 | What do you most often have to ask for that the agent should just show you? | | |
-| 2 | What bothers you most when working with agents? | | |
-| 3 | What would make you trust "done", and what do you not trust the agent to report? | | |
-| 4 | What do you still do by hand, or have taken back from the agent, and why? | | |
-| 5 | Where would you rather click than type? | | |
-| 6 | What must stay yours to approve or do? | | |
-
-### 8b. Use-case picks
-
-Cards whose gate fired, top twelve by evidence share, offered four per question; one first-pick question. Fit is one of: `picked (first)`, `picked`, `not picked`, `hard to imagine`, `not offered`, `not asked`, `not asked (not measured)`.
-
-| # | Use-case | Fit | What it must show (free text, first pick only) |
-|---|---|---|---|
-| 1 | Live run board | | |
-| 2 | Needs-you panel with one-click unblocks | | |
-| 3 | Verification board | | |
-| 4 | Decision form for batched questions, with a decision log | | |
-| 5 | Living plan and document with keep, cut and diff | | |
-| 6 | Screenshot walkthrough with comment pins | | |
-| 7 | Feedback batch triage table | | |
-| 8 | Outbound draft composer | | |
-| 9 | Errand tracker with per-step evidence | | |
-| 10 | Long-run operation console and dev-stack panel | | |
-| 11 | Analytics query workbench | | |
-| 12 | Return-to-session brief | | |
-| 13 | Review findings board | | |
-| 14 | Validation register | | |
-| 15 | Parallel attempts | | |
-| 16 | Deliverable locator | | |
-| 17 | Design option picker | | |
-| 18 | Consequential gate | | |
-| 19 | Meeting companion | | |
+| # | Question | My answer |
+|---|---|---|
+| 1 | Think of the last time working with an agent annoyed you. What happened? | |
+| 2 | What do you find yourself asking the agent for again and again? | |
+| 3 | After the agent says it is done, what do you check or redo by hand, and why? | |
+| 4 | When you come back to a running agent after a break, what do you want to know first? | |
 
 ## Privacy gate (all five must be true before sharing)
 
@@ -178,6 +148,6 @@ Cards whose gate fired, top twelve by evidence share, offered four per question;
 - [ ] Section 2 has count, share, two preceding signals, top ask and the one-line paraphrase
 - [ ] Section 3 has at most eight rows, each with primary, also matched and one intent line; `other` excluded
 - [ ] Section 6 rows all come from the derivation table in `use-cases.md`, ordered by share
-- [ ] Section 7 has nineteen rows in Fit order, then share order; every share names its denominator
-- [ ] Section 8 is verbatim; unanswered stays empty; 8b has nineteen rows
+- [ ] Section 7 has nineteen rows in share order with the Gate column filled; every share names its denominator
+- [ ] Section 8 has the four questions with the answers verbatim; a skipped question stays empty
 - [ ] Privacy gate ticked
