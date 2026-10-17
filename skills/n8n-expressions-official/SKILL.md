@@ -371,12 +371,13 @@ For those, see `n8n-code-nodes-official`.
 Per `n8n-code-nodes-official`'s decision tree:
 
 ```
-1. Single-field transform → expression in the field
-2. Multi-step pure logic on one item → arrow function in Edit Fields
-3. Multi-source aggregation, libraries, or stateful → Code node
+1. Branching/filtering/merging/other workflow operation → native node (IF, Switch, Filter, Merge, Aggregate, etc.)
+2. Single-field transform → expression in the field
+3. Multi-step field shaping on one item, with no dedicated node → arrow function in Edit Fields
+4. Multi-source aggregation, libraries, or stateful → Code node
 ```
 
-Expression is the default. Reach past it only when input or scope demands it.
+Native nodes are the default for workflow structure; expressions are the default for field values. Reach for a multi-line arrow function only when the data-shaping complexity requires it, not to hide branches that should be visible in the workflow.
 
 ## The "extra node" smell
 

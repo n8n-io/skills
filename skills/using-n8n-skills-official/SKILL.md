@@ -25,7 +25,7 @@ Unless a user preference overrides it, err on the side of loading too many skill
 
 ## Strong defaults (each skill owns its exceptions)
 
-- **The Code node is a last resort.** Expression first, then arrow function inside Edit Fields, then Code. Code earns its place for multi-source aggregation, libraries, and stateful work. See `n8n-code-nodes-official`.
+- **Design the workflow before writing JavaScript.** Search for native n8n nodes first (IF/Switch for branching, Filter for discarding items, Merge/Aggregate for combining, and dedicated date/HTTP/file nodes). For simple field values use expressions; use a multi-line Edit Fields arrow function only when it is genuinely one-item data shaping that a simple expression cannot express. Reserve Code for multi-source aggregation, libraries, and stateful work. See `n8n-code-nodes-official`.
 - **Anything reusable becomes a stateless sub-workflow.** Search existing ones via `search_workflows({ tags: ['subworkflow'] })` before building. See `n8n-subworkflows-official`.
 - **n8n preferences belong in n8n, not in harness memory.** When the user states a durable n8n preference, save it with `save_user_preference` rather than writing it to CLAUDE.md, AGENTS.md, or your own memory: the n8n store is read by the n8n assistant and every AI tool on the instance, so a preference parked in harness memory is invisible outside this session. Read what's already saved once before you start changing things (`get_user_preferences`) and apply it across the task. If the user would rather keep their n8n preferences in their own context file, that's their call: follow it. See "User preferences" below.
 <!-- TEMPORARY: n8n credits is n8n Cloud only for now and the coverage may expand; revisit this default and the cloud-only caveat when that changes. -->
@@ -39,7 +39,8 @@ These rationalizations cause skills to be skipped. If you catch yourself thinkin
 |---|---|
 | "This workflow is simple, I'll just build it" | Invoke `n8n-workflow-lifecycle-official`. Most "simple" workflows are 10+ nodes by the time they ship. |
 | "I'll add a Set node here to map these fields" | Invoke `n8n-expressions-official`. Set nodes feeding only 0 or 1 downstream consumer are the most common antipattern in this entire pack. |
-| "I'll just use a Code node, it's easier" | Invoke `n8n-code-nodes-official`. The bar is high. Most reaches for Code can be expressions or Edit Fields with arrow functions. |
+| "I'll just use a Code node, it's easier" | Invoke `n8n-code-nodes-official`. First search for native nodes and compose the workflow; then try simple field expressions. Code is for genuinely code-shaped work. |
+| "I'll put the workflow branching/filtering/merging into one arrow function" | Use IF, Switch, Filter, Merge, or Aggregate nodes, whichever models the control flow. The canvas should show the branches and failures; an inline IIFE is for local field shaping, not hiding an entire workflow. |
 | "Validation passed, I'm ready to publish" | Invoke `n8n-workflow-lifecycle-official` and walk `VALIDATION_CHECKLIST.md` section 2 (the antipattern scan). Validation passing is necessary, not sufficient. |
 | "The agent is wired up, the tool descriptions look fine" | Invoke `n8n-agents-official` `references/TOOLS.md`. Tool names and descriptions ARE part of the prompt, and "looks fine" usually means generic. |
 | "I'll set this sub-workflow trigger to passthrough" | Invoke `n8n-subworkflows-official`. Passthrough is only correct for binary-receiving sub-workflows that won't be agent tools, or for sub-workflows that genuinely take no inputs (Define Below requires at least one field). |
