@@ -85,12 +85,14 @@ When that bar is met:
 ```
 [Source: { arxivId, ... }]
    ↓
-[Data Table Get: filter arxivId eq $json.arxivId, limit 1]
+[Data Table Get: filter arxivId eq $json.arxivId, limit 1, alwaysOutputData=true]
    ↓
-[IF: result has items?]
+[IF: $('Get').first().json.arxivId notEmpty (typeValidation: 'loose')]
    ├── Yes → [Skip, or apply row-level logic from the stored row]
    └── No  → [Process] → [Data Table Insert: { arxivId, ...rest }]
 ```
+
+**Important:** Set `alwaysOutputData: true` on Data Table Get. A zero-row match otherwise emits no items and the IF node never runs, so the "new" path and any webhook response can be skipped silently. With that setting, check the returned unique field for `notEmpty` in the IF using `typeValidation: 'loose'`.
 
 For the full pattern surface (upsert, rowNotExists, Get+IF, idempotency keys), see `references/DEDUP_PATTERNS.md`.
 
@@ -128,6 +130,7 @@ For expression discipline (`$json` vs `$('Node Name').item.json`, the Set-node a
 
 | Anti-pattern | What goes wrong | Fix |
 |---|---|---|
+| Data Table Get followed by IF without `alwaysOutputData: true` | When no rows match, Get emits zero items and neither IF branch runs | Enable `alwaysOutputData: true` on Get; check `$('Get').first().json.arxivId` with `notEmpty` and loose type validation |
 | Set node upstream of Insert "to shape the input" | Extra node for nothing, classic Set antipattern, field shape drifts when you add columns | Map directly in the Insert node's per-column slots, OR rename upstream fields to enable auto-map |
 | Declaring `id`, `createdAt`, `updatedAt` in `create_data_table` | Errors, or shadows the system column with a user column that doesn't auto-update | Don't declare them, they're already there |
 | Storing application-critical data in Data Tables | If n8n breaks, you lose access | Use a real DB for data you can't lose |
