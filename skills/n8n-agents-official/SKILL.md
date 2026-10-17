@@ -21,10 +21,16 @@ There are other LangChain "chain" / utility nodes for narrow tasks: Information 
 
 Agent is a reasonable default for most LLM steps. Reach for Basic LLM Chain when you specifically want the leaner node for a one-shot text call with no tools, memory, or iteration. Reach for Information Extractor / Sentiment Analysis / Summarization Chain / Text Classifier when one of those purpose-built nodes matches the task exactly.
 
+### Information Extractor: built-in schema, not an output parser
+
+Information Extractor defines its output schema directly on the **Information Extractor node** using `schemaType: 'manual'` and `inputSchema` (a JSON schema). Do **not** attach an `outputParserStructured` sub-node: the Information Extractor has no `outputParser` connection, so the parser/fixer will never be invoked. Its language-model sub-node is connected as `model`, not `languageModel`.
+
+Information Extractor returns fields under an `output` wrapper; for a downstream field use `($('Information Extractor').item.json.output || $('Information Extractor').item.json).field`. If extraction fails, configure the Information Extractor's own `retryOnFail` instead of expecting an output-parser `autoFix` model to recover it.
+
 ## Non-negotiables
 
 1. **Tool names and descriptions are part of the prompt.** The model picks tools by name and description. Vague tool node names like (`doStuff`) or weak descriptions ("does things with the data") cause silent failure: the model skips your tool, mis-selects it, or hallucinates parameters. Treat both like API design. See `references/TOOLS.md`.
-2. **Structured output: parse AND autoFix.** `outputParserStructured` with `autoFix: true` and a coding-capable fixer model (e.g., Claude Sonnet 4.6) is the production pattern.
+2. **Agent / Basic LLM Chain structured output: parse AND autoFix.** `outputParserStructured` with `autoFix: true` and a coding-capable fixer model (e.g., Claude Sonnet 4.6) is the pattern for these nodes. Information Extractor uses its own `schemaType` and `inputSchema` instead.
 
 ## Strong defaults
 
@@ -132,7 +138,7 @@ Full config patterns, per-platform setup, and the multi-channel approver pattern
 
 ## Output parsing: when and how
 
-Add an `outputParser` sub-node when downstream needs structured data, not free-form text.
+On an **Agent or Basic LLM Chain**, add an `outputParser` sub-node when downstream needs structured data, not free-form text. **Do not use this pattern on Information Extractor:** it has a built-in schema; see the Information Extractor subsection above.
 
 ```ts
 const parser = outputParser({
@@ -202,7 +208,8 @@ This skill keeps RAG opinions thin on purpose. See `references/RAG.md` for more 
 | Cramming everything into the system prompt | Bloated prompt, reuse impossible, per-tool guidance buried | Move tool-specific instructions to tool descriptions, keep system prompt to persona + global rules |
 | Code-node tool where a sub-workflow would work | Not reusable, can't be tested independently, can't compose with branching | Use `toolWorkflow` with a proper sub-workflow |
 | Passing binary directly to a tool | Doesn't work, binary can't cross the tool boundary | Pre-stage to storage, pass keys via `fromAi`, tool fetches internally. See `n8n-binary-and-data-official` |
-| `outputParserStructured` without `autoFix` | One bad model output and the workflow fails | Set `autoFix: true` with a cheap fixer model |
+| `outputParserStructured` without `autoFix` on Agent / Basic LLM Chain | One bad model output and the workflow fails | Set `autoFix: true` with a suitable fixer model |
+| Wiring `outputParserStructured` to Information Extractor | No compatible parser socket: validation fails or the parser silently does nothing, so its fixer model never runs | Set `schemaType: 'manual'` and `inputSchema` on Information Extractor; use its own `retryOnFail` for retry |
 | Hardcoded `sessionId` or no sessionId | Conversations cross or memory never matches | Pass sessionId from trigger consistently to memory and tools |
 | Two near-identical tools instead of one with branching | Model gets confused, selection is non-deterministic | One tool with internal branching driven by parameters |
 | Hardcoding a system prompt that's reused across workflows or iterated often | Editing requires republishing, can't share across workflows, tuning churn lives in node JSON | Store in a Data Table, load at runtime |
