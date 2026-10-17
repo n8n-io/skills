@@ -142,7 +142,7 @@ For confirmed bugs:
 - Have the user post a question on https://community.n8n.io
 - Surface a clear repro to the user.
 - Check n8n GitHub issues. May already be filed.
-- If blocking, work around (different node/approach) and note in workflow notes.
+- If blocking, use a minimal, reversible workaround (a different node or approach). Keep the issue link and investigation notes in the external issue tracker or a separate handoff report, not in the workflow artifact.
 - If a fix is in progress, mark workarounds with `<!-- TEMPORARY: ... -->`
 
 ## Reference files
@@ -162,6 +162,6 @@ For confirmed bugs:
 | Re-implementing logic in a Code node when a configured node fails | Hides the bug, doesn't fix root cause | Diagnose first, only work around when the bug is confirmed |
 | Bisecting by deleting nodes randomly | Wastes time | Step through `get_workflow_execution` to find the failed node directly |
 | Asking the user to re-screenshot instead of inspecting via MCP | Slow, error-prone | Use `get_workflow_details` and `get_workflow_execution` |
-| Calling it "fixed" when you've worked around the bug, not understood it | Bug recurs in slightly different form | Document the cause. If working around, mark with `<!-- TEMPORARY: -->` |
+| Calling it "fixed" when you've worked around the bug, not understood it | Bug recurs in slightly different form | Document the cause and temporary nature in the external issue or handoff report, not by embedding ticket metadata or markers in the workflow |
 | Declaring a "bug" without asking the user's n8n version or when they last updated the skills | Real cause is often drift, and user updates and the "bug" disappears | Ask both versions before reporting. See Step 7. |
 

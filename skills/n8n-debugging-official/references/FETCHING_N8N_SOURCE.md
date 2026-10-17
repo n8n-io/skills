@@ -168,5 +168,5 @@ For a confirmed bug:
 
 1. Search existing issues at `github.com/n8n-io/n8n/issues` for the same symptom.
 2. If none match, file a new issue at `github.com/n8n-io/n8n/issues/new`. Include: clear repro, n8n version, expected vs actual, relevant source citation, and importantly, a disclaimer about using AI to create the issue.
-3. Note the issue number (existing or newly filed) in workflow notes or `CLAUDE.md` so future readers know why a workaround exists.
+3. Keep the issue number and the explanation of any temporary workaround in the issue tracker or a separate handoff report. Do not add ticket IDs, investigation notes, or self-referential reminders to workflow JSON, workflow notes, `CLAUDE.md`, or generated workflow files just to persist a debugging trail.
 4. Mark workarounds `<!-- TEMPORARY: ..., fixed in n8n X.Y.Z -->` so maintainers can find and remove them after the fix ships.
