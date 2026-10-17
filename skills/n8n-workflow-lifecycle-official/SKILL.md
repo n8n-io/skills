@@ -130,6 +130,18 @@ There are things the user has to do that you can't, and they need to be done bef
 
 Don't proceed to TEST until these are confirmed done.
 
+## Measuring time saved (optional Workflow ROI)
+
+When the user wants workflow ROI or time-saved reporting, use n8n's **Estimated time saved** setting in the **top-level (parent) workflow**, not a calculation hidden inside a child sub-workflow:
+
+1. **Fixed:** In workflow Settings, choose **Estimated time saved → Fixed** and enter the minutes of manual effort saved per production execution. Use this for a predictable, similar amount of work each run.
+2. **Dynamic:** In workflow Settings, choose **Estimated time saved → Dynamic**. Add **Time Saved** nodes to the parent workflow at the points where different execution paths actually save work. Set minutes per execution (once for all items) or **per item** when each incoming item represents a unit of work; per-item mode multiplies minutes by the number of input items.
+3. **Count only real work:** Multiple Time Saved nodes contribute to the same parent execution only when their paths execute. If a called sub-workflow processes records, put the corresponding Time Saved node **after its Execute Sub-workflow call in the parent**. Use meaningful parent-level branches or item counts so the saved-time estimate reflects the actual outcome, rather than claiming the same fixed savings on every path.
+4. **Hard limitation:** Time Saved nodes inside **sub-workflows do not contribute** to Insights time saved, and neither manual test runs nor error-workflow executions count. Place the tracking nodes in the **top-level orchestrator**; do not promise that a child can report ROI upward automatically.
+5. **Avoid duplicate runs:** Time Saved is a normal node, not a passive observer. Do not tee it into and rejoin a downstream action in a way that makes that action execute twice; place it inline at the appropriate completed branch.
+
+See [n8n Insights: setting time saved](https://docs.n8n.io/administer/observe-and-log/track-usage-with-insights/) for availability and current behavior.
+
 ## Handoff: production handoff (stage 6)
 
 After `publish_workflow` and a clean test, the workflow is technically live, but the user still needs enough context to actually *use* it in production. Treat this like the freelancer-to-customer handoff: short, structured, and oriented toward how they'll operate it from here.
@@ -162,6 +174,8 @@ Keep it tight: half a dozen bullets, not a wall of text. The user shouldn't have
 
 | Anti-pattern | What goes wrong | Fix |
 |---|---|---|
+| Time Saved node only inside a sub-workflow | Insights ignores child workflow time savings; parent ROI stays understated | Set Dynamic in the top-level parent and place Time Saved nodes in that parent after the relevant call or branch |
+| Time Saved on a parallel tee that later rejoins an action | That downstream action may execute again due to multiple incoming branches | Put Time Saved inline on the intended path, not as an unmerged side branch |
 | Calling `publish_workflow` without validating | Broken workflows reach production | Validate, verify connections, then test |
 | Creating workflows at root because the requested folder doesn't exist | Workflows get lost, and the user has to drag them manually | Surface the limitation *before* building |
 | Generic node names (`HTTP Request1`, `Set2`) | Workflows are unreadable a month later | Rename to describe the action |

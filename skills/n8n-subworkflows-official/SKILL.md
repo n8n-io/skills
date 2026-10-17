@@ -24,6 +24,12 @@ Without sub-workflows, the same logic gets duplicated across workflows. Bug fixe
 - **Description carries keywords.** Input/output shape + representative terms, so varied queries surface it.
 - **Split when input contracts genuinely differ** (binary vs JSON, sync vs async, divergent auth schemes). Don't fit divergent contracts under one trigger via passthrough + internal branching. See `references/SUBWORKFLOW_PATTERNS.md` "Splitting by input shape".
 
+## Time Saved / ROI belongs to the parent orchestrator
+
+n8n Insights does **not** currently count Time Saved nodes executed inside a child sub-workflow. If the caller wants time-saved reporting, configure the **top-level workflow** under **Settings → Estimated time saved → Dynamic** and place Time Saved nodes on the parent workflow's execution paths (for example, after an Execute Sub-workflow node succeeds). Do **not** place the only Time Saved node in the reusable child and expect the parent Insights total to change.
+
+For variable work, have the child return a useful count/status and let the parent branch or pass appropriately counted items to Time Saved in **per-item** mode; otherwise use **once for all items** for a single completed action. Only production parent executions contribute to the tracked total; manual runs and error workflows do not. See `n8n-workflow-lifecycle-official` "Measuring time saved" and [n8n's Insights documentation](https://docs.n8n.io/administer/observe-and-log/track-usage-with-insights/).
+
 ## Decision tree: should this be a sub-workflow?
 
 ```
