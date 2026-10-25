@@ -25,11 +25,10 @@ fi
 SESSION_ID="$(echo "${INPUT}" | jq -r '.session_id // empty' 2>/dev/null)"
 [ -z "${SESSION_ID}" ] && exit 0
 
-# Extract all .name fields from the requested node IDs. Handles both the
-# typed-object form ({ name, resource, operation }) and the raw-string form.
+# Support both current nodeIds/nodeId and legacy ids/name inputs.
 NODE_NAMES="$(echo "${INPUT}" | jq -r '
-  (.tool_input.ids // []) |
-  map(if type == "object" then .name else . end) |
+  (.tool_input.nodeIds // .tool_input.ids // []) |
+  map(if type == "object" then (.nodeId // .name) else . end) |
   .[]
 ' 2>/dev/null)"
 
