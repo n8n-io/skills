@@ -225,7 +225,7 @@ const totals = items.map(item => ({
 return totals.map(json => ({ json }))
 ```
 
-The return must be an array of `{ json: ... }` objects (or `{ json: ..., binary: ... }`), not raw JSON.
+The return shape depends on the run mode. Run Once for All Items returns an array of `{ json: ... }` objects (or `{ json: ..., binary: ... }`). Run Once for Each Item returns a single such object; an array throws `Code doesn't return an object. Array found instead.`
 
 For binary handling, error patterns, and Code-node-only bugs, see `references/JAVASCRIPT_PATTERNS.md`.
 
