@@ -1,0 +1,11 @@
+antigravity/SUBMISSION_DRAFT.md
+  ai_agent 51
+antigravity/VALIDATION.md
+  ai_agent 16,41,49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "984d77d54ad790281304cddb867457eaf42e8e87",
+  "prompts": {}
+}
