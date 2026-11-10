@@ -10,7 +10,6 @@
   "repository": "https://github.com/n8n-io/skills",
   "license": "Apache-2.0",
   "keywords": ["n8n", "workflow", "automation", "mcp"],
-  "hooks": "./hooks/agent-hooks.json",
   "userConfig": {
     "n8n_url": {
       "type": "string",

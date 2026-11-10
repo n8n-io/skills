@@ -23,24 +23,23 @@ const REPO_ROOT = join(PLUGIN_DIR, "..")
 const HOOKS_DIR = join(REPO_ROOT, "hooks")
 const SKILLS_DIR = join(REPO_ROOT, "skills")
 const META_SKILL_PATH = join(SKILLS_DIR, "using-n8n-skills-official", "SKILL.md")
-const MCP_TOOLS_PATH = join(SKILLS_DIR, "using-n8n-skills-official", "references", "MCP_TOOLS.md")
 
 // Must match STATE_DIR in hooks/pre-tool-use/_emit.sh and hooks/session-start.sh
 const STATE_DIR = join(process.env.TMPDIR ?? "/tmp", "n8n-skills-state")
 
 // Everything below fails silently by design, so a broken install (unexpected
 // repo layout) would otherwise be undiagnosable.
-if (!existsSync(HOOKS_DIR) || !existsSync(META_SKILL_PATH) || !existsSync(MCP_TOOLS_PATH)) {
-  console.warn(`[n8n-skills] hooks or startup guidance missing under ${REPO_ROOT}; check the plugin installation`)
+if (!existsSync(HOOKS_DIR) || !existsSync(META_SKILL_PATH)) {
+  console.warn(`[n8n-skills] hooks/ or skills/ not found under ${REPO_ROOT}; skills and reminders will not load`)
 }
 
-// Derive tool-suffix -> hook-script tables from hooks/agent-hooks.json (the source
+// Derive tool-suffix -> hook-script tables from hooks/hooks.json (the source
 // of truth for Claude Code and Codex) so new matchers there propagate without
 // touching this file. Matchers are ^mcp__.*__<suffix>$; only the suffix is
 // kept because MCP server names are user-configurable in OpenCode.
 function loadHookTable(event: "PreToolUse" | "PostToolUse"): Array<{ match: string; script: string }> {
   try {
-    const config = JSON.parse(readFileSync(join(HOOKS_DIR, "agent-hooks.json"), "utf-8"))
+    const config = JSON.parse(readFileSync(join(HOOKS_DIR, "hooks.json"), "utf-8"))
     const table: Array<{ match: string; script: string }> = []
     for (const entry of config.hooks?.[event] ?? []) {
       const suffix = /^\^mcp__\.\*__(\w+)\$$/.exec(entry.matcher ?? "")?.[1]
@@ -56,19 +55,20 @@ function loadHookTable(event: "PreToolUse" | "PostToolUse"): Array<{ match: stri
 const PRE_TOOL_HOOKS = loadHookTable("PreToolUse")
 const POST_TOOL_HOOKS = loadHookTable("PostToolUse")
 if (PRE_TOOL_HOOKS.length === 0) {
-  console.warn("[n8n-skills] no PreToolUse matchers parsed from hooks/agent-hooks.json; tool reminders disabled")
+  console.warn("[n8n-skills] no PreToolUse matchers parsed from hooks/hooks.json; tool reminders disabled")
 }
 
-// Refresh cached startup guidance when the router or tool reference changes.
+// Cache the meta-skill content with mtime-based invalidation.
+// On git pull, SKILL.md changes on disk; checking mtime ensures the cache
+// is invalidated without requiring an OpenCode restart.
 let metaSkillCache: string | null = null
-let metaSkillMtime = ""
+let metaSkillMtime = 0
 function getMetaSkill(): string | null {
   try {
     if (!existsSync(META_SKILL_PATH)) return null
-    const files = [META_SKILL_PATH, MCP_TOOLS_PATH].filter(file => existsSync(file))
-    const mtime = files.map(file => statSync(file).mtimeMs).join(":")
+    const mtime = statSync(META_SKILL_PATH).mtimeMs
     if (metaSkillCache === null || mtime !== metaSkillMtime) {
-      metaSkillCache = files.map(file => readFileSync(file, "utf-8")).join("\n\n")
+      metaSkillCache = readFileSync(META_SKILL_PATH, "utf-8")
       metaSkillMtime = mtime
     }
     return metaSkillCache

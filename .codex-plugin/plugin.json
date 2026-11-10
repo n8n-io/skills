@@ -11,5 +11,5 @@
   "license": "Apache-2.0",
   "keywords": ["n8n", "workflow", "automation", "mcp"],
   "skills": "./skills",
-  "hooks": "./hooks/agent-hooks.json"
+  "hooks": "./hooks/hooks.json"
 }

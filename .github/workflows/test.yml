@@ -27,11 +27,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
-        if: runner.os == 'Linux'
-      - run: pnpm exec vitest run tests/plugins.test.mjs --maxWorkers=1
-        if: runner.os != 'Linux'
-      - run: shellcheck --severity=warning hooks/*.sh hooks/pre-tool-use/*.sh hooks/post-tool-use/*.sh
-        if: runner.os == 'Linux'
       - name: Check committed diff
         if: runner.os == 'Linux'
         env:

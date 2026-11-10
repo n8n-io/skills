@@ -8,11 +8,11 @@ Built by the n8n team to pair with n8n's instance-level MCP server. Your coding 
 
 **What's inside:**
 
-- **The n8n MCP connection, set up for you** (Claude Code and Antigravity): the plugin bundles the `n8n-mcp` server and prompts for your instance URL during setup, so there's no manual MCP config. Codex adds it with one `codex mcp add`.
+- **The n8n MCP connection, set up for you** (Claude Code): the plugin bundles the `n8n-mcp` server and prompts for your instance URL at install, so there's no manual MCP config. Codex adds it with one `codex mcp add`.
 - **14 capability skills** covering best practices across the full workflow lifecycle: sub-workflow reuse, expressions, loops and pagination, n8n Agents, AI nodes, error handling, credentials, Data Tables, debugging, and more.
 - **50+ reference docs and worked examples** loaded on demand: per-node gotchas, decision trees, and copy-pasteable workflow JSON / TypeScript SDK snippets.
-- **Hooks and rules** that load or point to the router and its MCP tool reference.
-- **PreToolUse hooks** for Claude Code and Codex that nudge your agent to consult the matching skill before high-impact MCP calls.
+- **A SessionStart hook** that loads the protocol on every session, including a compact reference for every n8n MCP tool.
+- **PreToolUse hooks** that nudge your agent to consult the matching skill before high-impact MCP calls.
 
 ## Prerequisite
 
@@ -50,7 +50,7 @@ Inside a `claude` session:
 
 ### Google Antigravity
 
-The native plugin bundles the MCP connection and all 15 skills. It prompts for the full MCP endpoint and uses native OAuth. See the [Antigravity setup guide](.antigravity-plugin/README.md) for installation, permissions, and compatibility limits.
+Build the native Antigravity bundle with `pnpm build:antigravity`, then install `dist/antigravity/`. It includes all 15 skills and the MCP connection with native OAuth. See the [Antigravity setup guide](.antigravity-plugin/README.md). The build preserves the shared skills and existing client adapters.
 
 ### Codex
 
@@ -114,7 +114,7 @@ the n8n MCP tools, always start by loading the `using-n8n-skills-official` meta-
 and follow its routing into the matching capability skill before acting.
 ```
 
-> *The plugins load or point to the entry-point skill through their native hooks or rules. Plain skill installs don't include those reminders, so the snippet is what cues your agent to start every n8n task by loading `using-n8n-skills-official`.*
+> *The plugins ship a SessionStart hook that loads the entry-point skill for you. Plain skill installs don't have that hook, so the snippet is what cues your agent to start every n8n task by loading `using-n8n-skills-official`.*
 
 ## Skills inside
 
@@ -135,11 +135,11 @@ and follow its routing into the matching capability skill before acting.
 | `n8n-data-tables-official` | Data Tables: schemas, dedup, persistent state |
 | `n8n-debugging-official` | Things break |
 
-A 15th meta-skill, `using-n8n-skills-official`, is activated by the plugin hooks or rules and routes your agent to the right capability skill on every n8n task.
+A 15th meta-skill, `using-n8n-skills-official`, is loaded by the SessionStart hook in plugins and routes your agent to the right capability skill on every n8n task.
 
 ## How it works
 
-Each skill is a markdown file. Frontmatter tells the agent when to load it. Each client adapter activates the router. Claude Code and Codex use session and tool hooks. They load the router and tool reference at startup. OpenCode loads the same startup context and adds reminders to tool results. Antigravity uses an always-on rule that points to the router. It's all just markdown. Disagree with a call? Fork it.
+Each skill is a markdown file. Frontmatter tells the agent when to load it. The SessionStart hook routes to the right one on every n8n task; PreToolUse hooks pull the matching skill back into context before high-impact MCP calls. It's all just markdown. Disagree with a call? Fork it.
 
 ## Related
 
