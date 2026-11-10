@@ -1,0 +1,1 @@
+For n8n work, read @../skills/using-n8n-skills-official/SKILL.md with your available skill or file reader unless it is already in context. Follow its routing before acting. Reload the router and relevant skills after compaction.

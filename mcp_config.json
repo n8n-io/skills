@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "n8n-mcp": {
+      "url": "${N8N_MCP_URL}",
+      "variables": [
+        {
+          "name": "N8N_MCP_URL",
+          "title": "n8n MCP server URL",
+          "description": "Copy the full URL from n8n Settings > Instance-level MCP. It ends with /mcp-server/http. Use HTTPS for a remote instance.",
+          "link": "https://docs.n8n.io/build/ways-of-building-workflows/connect-to-n8n-mcp-server/"
+        }
+      ]
+    }
+  }
+}

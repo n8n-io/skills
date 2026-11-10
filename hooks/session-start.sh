@@ -15,8 +15,7 @@ set -uo pipefail
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 META_SKILL="${PLUGIN_ROOT}/skills/using-n8n-skills-official/SKILL.md"
-CACHE_DIR="${HOME}/.cache/n8n-skills"
-mkdir -p "${CACHE_DIR}" 2>/dev/null || true
+MCP_TOOLS="${PLUGIN_ROOT}/skills/using-n8n-skills-official/references/MCP_TOOLS.md"
 
 INPUT="$(cat)"
 
@@ -45,6 +44,10 @@ if [[ ! -r "${META_SKILL}" ]]; then
 fi
 
 SKILL_BODY="$(cat "${META_SKILL}")"
+# Preserve the full startup reference for Claude and Codex.
+if [[ -r "${MCP_TOOLS}" ]]; then
+  SKILL_BODY="${SKILL_BODY}"$'\n\n'"$(cat "${MCP_TOOLS}")"
+fi
 
 # Drift notices appended to the meta-skill body. Both stubbed in v0.1.0.
 # Real implementations land in v0.2 once we have a stable update channel.

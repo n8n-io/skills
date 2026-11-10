@@ -34,7 +34,7 @@ The plugin is glue code. All actual hook logic (node-specific warnings, antipatt
 
 ### Tool name matching
 
-The plugin derives the tool-name suffixes and their hook scripts from `hooks/hooks.json` (the same source of truth Claude Code and Codex use), so a new hook added there fires in OpenCode too without editing the plugin. It matches a suffix like `validate_workflow` against the tool name rather than hardcoding an MCP server prefix, since server names are user-configurable in OpenCode.
+The plugin reads `PreToolUse` and `PostToolUse` entries from `hooks/agent-hooks.json`. It supports the shared table's `^mcp__.*__<tool>$` matchers and first command hook. It matches tool suffixes because MCP server names vary.
 
 **The connected n8n MCP server must be named with `n8n` in it** (the default). The suffixes (`update_workflow`, `execute_workflow`, etc.) also appear on unrelated CI-automation MCP servers, so the plugin requires `n8n` in the tool name to avoid firing on the wrong tools. If your server is named without `n8n`, no hooks fire.
 
@@ -58,4 +58,4 @@ CLI install: if you pinned a version (`...skills.git#v1.2.0`), bump it in `openc
 rm -rf ~/.cache/opencode/packages/n8n-skills@git+*
 ```
 
-Desktop (symlink) install: `git pull` in your clone. Either way, no plugin edits are needed when n8n changes a hook's warnings or adds a new hook to `hooks/hooks.json`: the plugin reads that file at load and shells out to the bash scripts, so `hooks/` stays the single source of truth.
+Desktop (symlink) install: `git pull` in your clone. Changes to existing hook scripts need no plugin edits. Restart after changing the hook table.

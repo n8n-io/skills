@@ -1,7 +1,7 @@
 {
   "name": "n8n-skills",
   "version": "1.3.0",
-  "description": "n8n skills and hooks for coding agents. This package is the OpenCode plugin entry point; Claude Code and Codex read their own manifests from the repo root.",
+  "description": "n8n skills and hooks for coding agents. OpenCode uses this package entry point. Claude Code, Codex, and Antigravity use their manifests at the repo root.",
   "type": "module",
   "main": "opencode/plugin.ts",
   "files": [
@@ -15,5 +15,14 @@
     "n8n",
     "skills"
   ],
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "scripts": {
+    "test": "vitest run tests/ --maxWorkers=1",
+    "validate:antigravity": "agy plugin validate --strict ."
+  },
+  "devDependencies": {
+    "vitest": "^5.1.0",
+    "yaml": "^2.9.1"
+  },
+  "packageManager": "pnpm@10.34.5"
 }
