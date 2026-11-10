@@ -1,0 +1,46 @@
+.antigravity-plugin/router.md
+  s_3b006d4861aeeb::t_17df7b3d68e276 1-8
+opencode/plugin.ts
+  s_3b006d4861aeeb::t_17df7b3d68e276 32-33,36,42,58,61-63,65,69,71
+CLAUDE.md
+  s_3b006d4861aeeb::t_17df7b3d68e276 43,46
+  s_3b006d4861aeeb::t_81ebaffdccb5ae 64
+.codex-plugin/plugin.json
+  s_3b006d4861aeeb::t_17df7b3d68e276 14
+opencode/README.md
+  s_3b006d4861aeeb::t_17df7b3d68e276 37,61
+hooks/hooks.json
+  s_3b006d4861aeeb::t_17df7b3d68e276 1-100
+README.md
+  s_3b006d4861aeeb::t_17df7b3d68e276 11,14-15,53,117,138,142
+.gitignore
+  s_3b006d4861aeeb::t_17df7b3d68e276 14-15
+tests/plugins.test.mjs
+  s_3b006d4861aeeb::t_53da5ba19ac35b 2-3,7,11-13,20-24,26-36,38,52,66-83,93-94,96-97
+package.json
+  s_3b006d4861aeeb::t_17df7b3d68e276 4,21-22
+.antigravity-plugin/README.md
+  s_3b006d4861aeeb::t_17df7b3d68e276 11-12,16-18,26,42,48
+hooks/session-start.sh
+  s_3b006d4861aeeb::t_17df7b3d68e276 18-19
+skills/using-n8n-skills-official/SKILL.md
+  s_3b006d4861aeeb::t_17df7b3d68e276 3,14,30,36,61,65,84-159,161-191,198,209
+.antigravity-plugin/build.mjs
+  s_3b006d4861aeeb::t_17df7b3d68e276 1-2,5-6,8-14,16-19,22-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2c15b20f288f4f1bb20f1b608548f0e4eaa5bf3f",
+  "prompts": {},
+  "sessions": {
+    "s_3b006d4861aeeb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c4ce-91a3-70e0-89c6-04fc9827dd8a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Arvin Ansari <arvin.ansari@n8n.io>"
+    }
+  }
+}
