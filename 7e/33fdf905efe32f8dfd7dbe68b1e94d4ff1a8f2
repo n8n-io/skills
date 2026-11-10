@@ -1,0 +1,92 @@
+tests/plugins.test.mjs
+  s_3b006d4861aeeb::t_8f31696f8d8be6 87-89
+  s_3b006d4861aeeb::t_9244a7df0ca90d 59
+  s_3b006d4861aeeb::t_ef081717cce5c2 1-58,60-86,90-93
+tests/hooks.test.mjs
+  s_3b006d4861aeeb::t_ef081717cce5c2 1-82
+opencode/README.md
+  s_3b006d4861aeeb::t_55a4d517552ce0 37,61
+.antigravity-plugin/README.md
+  s_3b006d4861aeeb::t_b48f4d1a76cac1 48-53
+  s_3b006d4861aeeb::t_0f29a8ff3b5897 1-47,54-60
+.antigravity-plugin/plugin.json
+  s_3b006d4861aeeb::t_56ef3148e0d4c3 1-26
+.codex-plugin/plugin.json
+  s_3b006d4861aeeb::t_56ef3148e0d4c3 3
+  s_3b006d4861aeeb::t_55a4d517552ce0 14
+tests/opencode.test.mjs
+  s_3b006d4861aeeb::t_ef081717cce5c2 1-58
+antigravity/SUBMISSION_DRAFT.md
+  s_3b006d4861aeeb::t_e17b13d111a20f 1-74
+CLAUDE.md
+  s_3b006d4861aeeb::t_0f29a8ff3b5897 43,64
+  s_3b006d4861aeeb::t_55a4d517552ce0 46
+README.md
+  s_3b006d4861aeeb::t_0f29a8ff3b5897 14-15,27,51-65,128,149,153
+  s_3b006d4861aeeb::t_fd11715ccdb6e9 11
+hooks/session-start.sh
+  s_3b006d4861aeeb::t_55a4d517552ce0 18
+.github/workflows/test.yml
+  s_3b006d4861aeeb::t_9244a7df0ca90d 25-42
+  s_3b006d4861aeeb::t_0f29a8ff3b5897 1-24
+mcp_config.json
+  s_3b006d4861aeeb::t_56ef3148e0d4c3 1-15
+skills/using-n8n-skills-official/SKILL.md
+  s_3b006d4861aeeb::t_8f31696f8d8be6 12
+  s_3b006d4861aeeb::t_6cc9985486af0a 18
+  s_3b006d4861aeeb::t_56ef3148e0d4c3 3,10-11,13,34,40,65,69,88,90,97,108
+antigravity/VALIDATION.md
+  s_3b006d4861aeeb::t_3762fd1d540b0a 3
+  s_3b006d4861aeeb::t_92b729f935fc6b 1-2,4-9,11-18,20-24,26-31,33,35,63-64
+  s_3b006d4861aeeb::t_cc5441ca47fa43 10,25,32
+  s_3b006d4861aeeb::t_e17b13d111a20f 19,34,36-62
+vitest.config.mjs
+  s_3b006d4861aeeb::t_ef081717cce5c2 1-5
+assets/n8n-logo.svg
+  s_3b006d4861aeeb::t_56ef3148e0d4c3 1-3
+assets/README.md
+  s_3b006d4861aeeb::t_56ef3148e0d4c3 1-7
+antigravity/RELEASE_CHECKLIST.md
+  s_3b006d4861aeeb::t_b48f4d1a76cac1 22
+  s_3b006d4861aeeb::t_3762fd1d540b0a 3
+  s_3b006d4861aeeb::t_e17b13d111a20f 36,54-56
+  s_3b006d4861aeeb::t_0f29a8ff3b5897 1-2,4-21,23-35,37-53,57-58
+hooks/pre-tool-use/get-node.sh
+  s_3b006d4861aeeb::t_56ef3148e0d4c3 28,30-31
+.claude-plugin/marketplace.json
+  s_3b006d4861aeeb::t_56ef3148e0d4c3 12
+scripts/antigravity-reminder.mjs
+  s_3b006d4861aeeb::t_56ef3148e0d4c3 1-7,9-10
+  s_3b006d4861aeeb::t_8f31696f8d8be6 8
+package.json
+  s_3b006d4861aeeb::t_56ef3148e0d4c3 3
+  s_3b006d4861aeeb::t_55a4d517552ce0 4,18-21
+  s_3b006d4861aeeb::t_e9dad328a18da8 22-25
+  s_3b006d4861aeeb::t_0f29a8ff3b5897 26-27
+hooks.json
+  s_3b006d4861aeeb::t_56ef3148e0d4c3 1-11
+.claude-plugin/plugin.json
+  s_3b006d4861aeeb::t_56ef3148e0d4c3 3
+  s_3b006d4861aeeb::t_55a4d517552ce0 13
+skills/using-n8n-skills-official/references/MCP_TOOLS.md
+  s_3b006d4861aeeb::t_6cc9985486af0a 7,23,38,47-48,54,63,76,85
+  s_3b006d4861aeeb::t_56ef3148e0d4c3 1-6,8-22,24-37,39-46,49-53,55-62,64-75,77-84,86-108
+opencode/plugin.ts
+  s_3b006d4861aeeb::t_55a4d517552ce0 36,42,58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7e33fdf905efe32f8dfd7dbe68b1e94d4ff1a8f2",
+  "prompts": {},
+  "sessions": {
+    "s_3b006d4861aeeb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c4ce-91a3-70e0-89c6-04fc9827dd8a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Arvin Ansari <arvin.ansari@n8n.io>"
+    }
+  }
+}
