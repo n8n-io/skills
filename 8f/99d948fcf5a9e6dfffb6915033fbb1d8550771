@@ -1,0 +1,19 @@
+README.md
+  s_3b006d4861aeeb::t_49cd823003e754 117,142
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8f99d948fcf5a9e6dfffb6915033fbb1d8550771",
+  "prompts": {},
+  "sessions": {
+    "s_3b006d4861aeeb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c4ce-91a3-70e0-89c6-04fc9827dd8a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Arvin Ansari <arvin.ansari@n8n.io>"
+    }
+  }
+}
