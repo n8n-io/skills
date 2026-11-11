@@ -43,7 +43,7 @@ function loadHookTable(event: "PreToolUse" | "PostToolUse"): Array<{ match: stri
     const table: Array<{ match: string; script: string }> = []
     for (const entry of config.hooks?.[event] ?? []) {
       const suffix = /^\^mcp__\.\*__(\w+)\$$/.exec(entry.matcher ?? "")?.[1]
-      const script = entry.hooks?.[0]?.command?.split("/hooks/")[1]
+      const script = entry.hooks?.[0]?.command?.replace(/"/g, "").split("/hooks/")[1]
       if (suffix && script) table.push({ match: suffix, script })
     }
     return table
