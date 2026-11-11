@@ -24,6 +24,7 @@ Pick your platform:
 
 - [Claude Code (CLI)](#claude-code-cli)
 - [Claude Code (Desktop app)](#claude-code-desktop-app)
+- [Google Antigravity](#google-antigravity)
 - [Codex](#codex)
 - [OpenCode (CLI)](#opencode-cli)
 - [OpenCode (Desktop app)](#opencode-desktop-app)
@@ -46,6 +47,10 @@ Inside a `claude` session:
 2. **Install.** Click **+** next to the prompt box → **Plugins** → **Add plugin**, select **n8n-skills** in the plugin browser, and pick a scope. Enter your **n8n instance URL** when prompted (just the base URL, e.g. `https://acme.app.n8n.cloud` — the plugin adds `/mcp-server/http`).
    - No prompt? Set it with `/plugin configure n8n-skills@n8n-io`, then reload.
 3. **Authorize the MCP.** Open **Settings → Connectors**, find **n8n-mcp**, and connect (browser sign-in).
+
+### Google Antigravity
+
+Build the native Antigravity bundle with `pnpm build:antigravity`, then install `dist/antigravity/`. It includes all 15 skills and the MCP connection with native OAuth. See the [Antigravity setup guide](.antigravity-plugin/README.md). The build preserves the shared skills and existing client adapters.
 
 ### Codex
 
@@ -109,7 +114,7 @@ the n8n MCP tools, always start by loading the `using-n8n-skills-official` meta-
 and follow its routing into the matching capability skill before acting.
 ```
 
-> *The plugins ship a SessionStart hook that loads the entry-point skill for you. Plain skill installs don't have that hook, so the snippet is what cues your agent to start every n8n task by loading `using-n8n-skills-official`.*
+> *The plugins activate the entry-point skill through native hooks or rules. Plain skill installs don't include those reminders, so the snippet is what cues your agent to start every n8n task by loading `using-n8n-skills-official`.*
 
 ## Skills inside
 
@@ -134,7 +139,7 @@ A 15th meta-skill, `using-n8n-skills-official`, is loaded by the SessionStart ho
 
 ## How it works
 
-Each skill is a markdown file. Frontmatter tells the agent when to load it. The SessionStart hook routes to the right one on every n8n task; PreToolUse hooks pull the matching skill back into context before high-impact MCP calls. It's all just markdown. Disagree with a call? Fork it.
+Each skill is a markdown file. Frontmatter tells the agent when to load it. Claude Code and Codex load the router through SessionStart hooks; PreToolUse hooks pull matching skills back into context before high-impact MCP calls. Antigravity uses an always-on rule to load its entry skill. It's all just markdown. Disagree with a call? Fork it.
 
 ## Related
 
