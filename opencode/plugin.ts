@@ -17,7 +17,7 @@
 
 import type { Plugin as PluginV1 } from "@opencode-ai/plugin"
 import type { Plugin as PluginV2 } from "@opencode/plugin"
-import { readFileSync, existsSync, statSync, readdirSync, rmSync } from "fs"
+import { readFileSync, existsSync, statSync, readdirSync, rmSync, type Dirent } from "fs"
 import { join, dirname } from "path"
 import { fileURLToPath } from "url"
 import { spawnSync } from "child_process"
@@ -264,11 +264,20 @@ function loadBundledSkills(): Array<{
   content: string
 }> {
   const skills: Array<{ id: string; name: string; description?: string; path: string; content: string }> = []
+  let entries: Dirent[]
   try {
-    for (const entry of readdirSync(SKILLS_DIR, { withFileTypes: true })) {
-      if (!entry.isDirectory() || entry.name.startsWith(".")) continue
-      const path = join(SKILLS_DIR, entry.name, "SKILL.md")
-      if (!existsSync(path)) continue
+    entries = readdirSync(SKILLS_DIR, { withFileTypes: true })
+  } catch (error) {
+    console.warn(`[n8n-skills] could not read bundled skills from ${SKILLS_DIR}:`, error)
+    return skills
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue
+    const path = join(SKILLS_DIR, entry.name, "SKILL.md")
+    if (!existsSync(path)) continue
+    // Isolate per-skill failures: one unreadable file must not drop the rest.
+    try {
       const { attributes, body } = parseFrontmatter(readFileSync(path, "utf-8"))
       skills.push({
         id: entry.name,
@@ -277,9 +286,9 @@ function loadBundledSkills(): Array<{
         path,
         content: body,
       })
+    } catch (error) {
+      console.warn(`[n8n-skills] could not read bundled skill ${path}:`, error)
     }
-  } catch (error) {
-    console.warn(`[n8n-skills] could not read bundled skills from ${SKILLS_DIR}:`, error)
   }
   return skills
 }
