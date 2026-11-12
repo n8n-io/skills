@@ -2,10 +2,21 @@
 // OpenCode plugin for n8n-skills: bridges the existing bash hooks into
 // OpenCode's plugin event system. See opencode/README.md for installation.
 //
-// Requires bash and jq on the system (the hook scripts use them). The
-// @opencode-ai/plugin import is type-only and erased at build, not a runtime dep.
+// Supports both plugin APIs from one entrypoint:
+//
+//   V1  OpenCode calls the default export's server() function and uses the
+//       returned hook map. The config hook registers the bundled skills/ dir.
+//   V2  OpenCode reads the default export's id and setup() and ignores server().
+//       setup() registers skills and hooks through the plugin context.
+//
+// The default export is a plain object rather than Plugin.define() so V1
+// installations do not need @opencode/plugin installed at runtime. Both API
+// types below are type-only imports and are erased before the plugin loads.
+//
+// Requires bash and jq on the system (the hook scripts use them).
 
-import type { Plugin } from "@opencode-ai/plugin"
+import type { Plugin as PluginV1 } from "@opencode-ai/plugin"
+import type { Plugin as PluginV2 } from "@opencode/plugin"
 import { readFileSync, existsSync, statSync, readdirSync, rmSync } from "fs"
 import { join, dirname } from "path"
 import { fileURLToPath } from "url"
@@ -26,6 +37,9 @@ const META_SKILL_PATH = join(SKILLS_DIR, "using-n8n-skills-official", "SKILL.md"
 
 // Must match STATE_DIR in hooks/pre-tool-use/_emit.sh and hooks/session-start.sh
 const STATE_DIR = join(process.env.TMPDIR ?? "/tmp", "n8n-skills-state")
+
+// Stable across versions: V2 scopes plugin storage and diagnostics by this ID.
+const PLUGIN_ID = "n8n-skills"
 
 // Everything below fails silently by design, so a broken install (unexpected
 // repo layout) would otherwise be undiagnosable.
@@ -113,9 +127,60 @@ function runHook(scriptPath: string, hookInput: string): { hookSpecificOutput?: 
   }
 }
 
-// The SDK types say tool.execute.after output is { output: string }, but at
-// runtime MCP tools receive the raw MCP CallToolResult ({ content: [...] })
-// instead, so duck-type both shapes. See README "MCP tool output shapes".
+// Run every matching PreToolUse and PostToolUse script and return the text to
+// append to the tool result. V1 and V2 have different result shapes, but the
+// reminder text is identical.
+function collectReminders(toolName: string, sessionID: string, toolInput: unknown): string {
+  let text = ""
+  try {
+    // PreToolUse reminders: the agent sees the reminder in the tool
+    // result and applies it on the next action
+    for (const hook of PRE_TOOL_HOOKS) {
+      if (!isN8nTool(toolName, hook.match)) continue
+      const hookInput = JSON.stringify({ session_id: sessionID, tool_input: toolInput })
+      const parsed = runHook(join(HOOKS_DIR, hook.script), hookInput)
+      if (parsed?.hookSpecificOutput?.additionalContext) {
+        text += `\n\n--- n8n skill reminder ---\n${parsed.hookSpecificOutput.additionalContext}`
+      }
+      break // Only one pre-tool hook matches per tool call
+    }
+
+    // PostToolUse analysis: runs after validate_workflow to suggest
+    // which skills to load based on the node types detected in the code
+    for (const hook of POST_TOOL_HOOKS) {
+      if (!isN8nTool(toolName, hook.match)) continue
+      const hookInput = JSON.stringify({ session_id: sessionID, tool_input: toolInput })
+      const parsed = runHook(join(HOOKS_DIR, hook.script), hookInput)
+      if (parsed?.hookSpecificOutput?.additionalContext) {
+        text += `\n\n--- n8n post-validation analysis ---\n${parsed.hookSpecificOutput.additionalContext}`
+      }
+      break
+    }
+  } catch {
+    // Silent failure: never block tool execution if serialization or hooks fail
+  }
+  return text
+}
+
+// Clear this session's one-shot markers so tool reminders fire again after
+// compaction. Mirrors hooks/session-start.sh, which wipes them because the
+// agent's memory of the reminders is gone.
+function clearSessionMarkers(sessionID: string): void {
+  try {
+    for (const f of readdirSync(STATE_DIR)) {
+      if (f.startsWith(`${sessionID}-`) && f.endsWith(".loaded")) {
+        rmSync(join(STATE_DIR, f), { force: true })
+      }
+    }
+  } catch {
+    // State dir may not exist yet; markers only exist after a hook fired
+  }
+}
+
+// V1 tool.execute.after gets a mutable output object in one of two shapes.
+// The SDK types say { output: string }, but at runtime MCP tools receive the
+// raw MCP CallToolResult ({ content: [...] }) instead, so duck-type both.
+// See README "MCP tool output shapes".
 function appendToOutput(output: any, text: string): void {
   if (typeof output.output === "string") {
     output.output += text
@@ -124,7 +189,103 @@ function appendToOutput(output: any, text: string): void {
   }
 }
 
-const N8nSkillsPlugin: Plugin = async (input) => {
+// V2 tool.execute.after exposes a Tool.Result: { output?, content?, metadata? }.
+// Content is what the model sees, so prefer it, then fall back to a string
+// output, then create content when the tool returned neither.
+function appendToResult(result: any, text: string): any {
+  if (typeof result.content === "string") return { ...result, content: result.content + text }
+  if (Array.isArray(result.content)) return { ...result, content: [...result.content, { type: "text", text }] }
+  if (typeof result.output === "string") return { ...result, output: result.output + text }
+  return { ...result, content: text }
+}
+
+// V1 config hook equivalent for V2: V2 has no mutable global config, so the
+// bundled skills are added through the skill domain instead of skills.paths.
+// Parse just enough frontmatter for Skill.Info. The bundled skills use
+// single-line scalar values; folded block values are handled for future files.
+function parseFrontmatter(source: string): { attributes: Record<string, string>; body: string } {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/.exec(source)
+  if (!match) return { attributes: {}, body: source }
+
+  const attributes: Record<string, string> = {}
+  let key: string | undefined
+  let lines: string[] = []
+  const flush = () => {
+    if (key === undefined) return
+    const value = parseScalar(lines)
+    if (value !== undefined) attributes[key] = value
+    key = undefined
+    lines = []
+  }
+
+  for (const line of match[1].split(/\r?\n/)) {
+    const pair = /^([A-Za-z0-9_-]+):(?:[ \t]+(.*))?$/.exec(line)
+    if (pair) {
+      flush()
+      key = pair[1]
+      lines = pair[2] === undefined ? [] : [pair[2]]
+      continue
+    }
+    if (key !== undefined && (/^[ \t]+/.test(line) || line.trim() === "")) {
+      lines.push(line.trim())
+      continue
+    }
+    flush()
+  }
+  flush()
+  return { attributes, body: match[2] }
+}
+
+function parseScalar(raw: string[]): string | undefined {
+  const lines = raw.slice()
+  while (lines.length > 0 && lines[0] === "") lines.shift()
+  if (lines.length === 0) return ""
+  const first = lines[0].trim()
+  const block = /^[>|][+-]?$/.test(first)
+  const value = block
+    ? lines.slice(1).join(first.startsWith("|") ? "\n" : " ").trim()
+    : lines.join(" ").trim()
+  if (value.startsWith("'") && value.endsWith("'")) return value.slice(1, -1).replace(/''/g, "'")
+  if (value.startsWith('"') && value.endsWith('"')) {
+    try {
+      return JSON.parse(value)
+    } catch {
+      return value.slice(1, -1)
+    }
+  }
+  return value
+}
+
+function loadBundledSkills(): Array<{
+  id: string
+  name: string
+  description?: string
+  path: string
+  content: string
+}> {
+  const skills: Array<{ id: string; name: string; description?: string; path: string; content: string }> = []
+  try {
+    for (const entry of readdirSync(SKILLS_DIR, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue
+      const path = join(SKILLS_DIR, entry.name, "SKILL.md")
+      if (!existsSync(path)) continue
+      const { attributes, body } = parseFrontmatter(readFileSync(path, "utf-8"))
+      skills.push({
+        id: entry.name,
+        name: attributes.name || entry.name,
+        ...(attributes.description ? { description: attributes.description } : {}),
+        path,
+        content: body,
+      })
+    }
+  } catch (error) {
+    console.warn(`[n8n-skills] could not read bundled skills from ${SKILLS_DIR}:`, error)
+  }
+  return skills
+}
+
+// V1 implementation. OpenCode calls this through the default export's server().
+const serverV1: PluginV1 = async () => {
   return {
     // 0. Register the bundled skills/ dir into live config so OpenCode discovers
     // the n8n capability skills without the user editing skills.paths. Lets a
@@ -154,15 +315,7 @@ const N8nSkillsPlugin: Plugin = async (input) => {
     // reminders: mirrors hooks/session-start.sh, which wipes this session's
     // markers on compact because the agent's memory of the reminders is gone
     "experimental.session.compacting": async (input, output) => {
-      try {
-        for (const f of readdirSync(STATE_DIR)) {
-          if (f.startsWith(`${input.sessionID}-`) && f.endsWith(".loaded")) {
-            rmSync(join(STATE_DIR, f), { force: true })
-          }
-        }
-      } catch {
-        // State dir may not exist yet; markers only exist after a hook fired
-      }
+      clearSessionMarkers(input.sessionID)
       const metaSkill = getMetaSkill()
       if (!metaSkill) return
       output.context.push(`## n8n Skills Protocol\n\n${metaSkill}`)
@@ -172,43 +325,63 @@ const N8nSkillsPlugin: Plugin = async (input) => {
     // OpenCode has no way to inject model-visible text before a tool runs, so
     // both PreToolUse reminders and PostToolUse analysis land in the result.
     "tool.execute.after": async (input, output) => {
-      try {
-        // PreToolUse reminders: the agent sees the reminder in the tool
-        // result and applies it on the next action
-        for (const hook of PRE_TOOL_HOOKS) {
-          if (!isN8nTool(input.tool, hook.match)) continue
-          const hookInput = JSON.stringify({
-            session_id: input.sessionID,
-            tool_input: input.args,
-          })
-          const scriptPath = join(HOOKS_DIR, hook.script)
-          const parsed = runHook(scriptPath, hookInput)
-          if (parsed?.hookSpecificOutput?.additionalContext) {
-            appendToOutput(output, `\n\n--- n8n skill reminder ---\n${parsed.hookSpecificOutput.additionalContext}`)
-          }
-          break // Only one pre-tool hook matches per tool call
-        }
-
-        // PostToolUse analysis: runs after validate_workflow to suggest
-        // which skills to load based on the node types detected in the code
-        for (const hook of POST_TOOL_HOOKS) {
-          if (!isN8nTool(input.tool, hook.match)) continue
-          const hookInput = JSON.stringify({
-            session_id: input.sessionID,
-            tool_input: input.args,
-          })
-          const scriptPath = join(HOOKS_DIR, hook.script)
-          const parsed = runHook(scriptPath, hookInput)
-          if (parsed?.hookSpecificOutput?.additionalContext) {
-            appendToOutput(output, `\n\n--- n8n post-validation analysis ---\n${parsed.hookSpecificOutput.additionalContext}`)
-          }
-          break
-        }
-      } catch {
-        // Silent failure: never block tool execution if serialization or hooks fail
-      }
+      const text = collectReminders(input.tool, input.sessionID, input.args)
+      if (text) appendToOutput(output, text)
     },
   }
 }
 
-export default N8nSkillsPlugin
+// V2 implementation. OpenCode reads id and setup() from the default export.
+const setupV2: PluginV2.Plugin["setup"] = async (ctx) => {
+  // 0. V2 has no mutable global config object, so add the bundled skills
+  // through the skill domain. Same result as the V1 config hook above.
+  // Read the files before registering: transforms are replayed and must stay
+  // synchronous and cheap.
+  try {
+    const bundledSkills = loadBundledSkills()
+    await ctx.skill.transform((editor) => {
+      for (const skill of bundledSkills) {
+        editor.add(skill as any)
+      }
+    })
+  } catch (error) {
+    // Skill registration failure must not disable the meta-skill or reminders.
+    console.warn(`[n8n-skills] could not register bundled skills from ${SKILLS_DIR}:`, error)
+  }
+
+  // 1. Inject meta-skill into the agent loop's system instructions.
+  // The context hook runs before each agent model request, including tool
+  // continuations. The marker keeps this idempotent if the same array is reused.
+  await ctx.session.hook("context", (event) => {
+    const metaSkill = getMetaSkill()
+    if (!metaSkill) return
+    if (!event.system.some((part) => part.type === "text" && part.text.includes(SYSTEM_MARKER))) {
+      event.system.push({ type: "text", text: `${SYSTEM_MARKER}\n\n${metaSkill}` })
+    }
+  })
+
+  // 2. Ensure meta-skill survives compaction, and re-arm the one-shot tool
+  // reminders. Same behavior as the V1 compacting hook.
+  await ctx.session.hook("compaction", (event) => {
+    clearSessionMarkers(event.sessionID)
+    const metaSkill = getMetaSkill()
+    if (!metaSkill) return
+    event.system.push({ type: "text", text: `## n8n Skills Protocol\n\n${metaSkill}` })
+  })
+
+  // 3. After n8n MCP tools return, append hook reminders to the tool result.
+  await ctx.tool.hook("execute.after", (event) => {
+    if (event.status !== "completed") return
+    const text = collectReminders(event.tool, event.sessionID, event.input)
+    if (text) event.result = appendToResult(event.result, text)
+  })
+}
+
+// One default export for both APIs. V2 ignores server() and reads id + setup();
+// V1 ignores setup() and calls server(). See the migration guide:
+// https://opencode.ai/docs/build/plugins/migrate-v1
+export default {
+  id: PLUGIN_ID,
+  setup: setupV2,
+  server: serverV1,
+}
