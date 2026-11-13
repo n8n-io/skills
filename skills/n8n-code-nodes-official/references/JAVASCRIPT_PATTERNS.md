@@ -21,11 +21,11 @@ return totals.map(json => ({ json }))
 
 ### Run Once for Each Item
 
-Runs once per input item. `$input.first()` (or `$input.item`) is the current item.
+Runs once per input item. `$input.item` is the current item. Return a single `{ json: ... }` object, not an array.
 
 ```ts
-const item = $input.first().json
-return [{ json: { ...item, total: item.qty * item.price } }]
+const item = $input.item.json
+return { json: { ...item, total: item.qty * item.price } }
 ```
 
 
@@ -41,7 +41,12 @@ return [{ json: { ...item, total: item.qty * item.price } }]
 
 ## Return shape
 
-The Code node must return an array of `{ json: ... }` objects. Variations:
+Match the return shape to the configured run mode:
+
+- **Run Once for All Items**: return an array of `{ json: ... }` objects.
+- **Run Once for Each Item**: return a single `{ json: ... }` object. An array throws `Code doesn't return an object. Array found instead.`
+
+Run Once for All Items variations:
 
 ```ts
 // Single output item
@@ -63,10 +68,10 @@ return [{
 return []
 ```
 
-Common mistake: returning the raw object instead of the array-of-`{json}` shape.
+Common mistake: returning a raw object in Run Once for All Items instead of the array-of-`{json}` shape.
 
 ```ts
-// ❌ DON'T
+// ❌ DON'T (Run Once for All Items)
 return { foo: 'bar' }
 
 // ✅ DO
