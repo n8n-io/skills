@@ -9,7 +9,7 @@ The Code node is powerful and often the wrong tool. The n8n equivalent of droppi
 
 ## Strong defaults
 
-1. **Code node is a last resort.** Decision order: expression (`{{...}}`) → arrow function inside Edit Fields → Code node. The first two paths cover most "transform this data" tasks. Code earns its place for multi-source aggregation, external libraries, and a few specific patterns documented below.
+1. **Workflows first, JavaScript last.** Decision order: use a suitable native node for workflow operations (IF/Switch, Filter, Merge, Aggregate, HTTP Request, etc.) → a simple expression for field shaping → a multi-line Edit Fields arrow function only for one-item logic that needs it → Code node for multi-source aggregation, external libraries, and the specific cases below.
 
 2. **Default to JavaScript.** Write JS unless the user explicitly asked for Python ("use Python here," "I'm a Python shop," pasted Python code). Everywhere else in n8n (expressions, Edit Fields) is JS, JS has a curated library allowlist (`lodash`, `crypto`, `luxon`).
 
@@ -17,12 +17,16 @@ The Code node is powerful and often the wrong tool. The n8n equivalent of droppi
 
 ```
 Need custom logic?
+├── Is it actually workflow branching, filtering, merging, aggregation, or I/O?
+│   └── Search for an n8n node first (IF, Switch, Filter, Merge, Aggregate, HTTP Request, etc.).
+│       Keep control flow visible on the canvas instead of hiding it in JavaScript.
+│
 ├── Is it a transformation of one or two fields?
 │   └── Expression: {{ $json.foo.toUpperCase() }} or {{ $json.items.map(item => item.name).join(', ') }}
 │       Most "just transform this" cases land here.
 │
-├── Is it multi-line, but pure data shaping (map, filter, reduce, conditional)?
-│   └── Edit Fields with arrow function expression. See references/ARROW_FUNCTIONS_IN_EDIT_FIELDS.md
+├── Is it multi-line, but local to one item's field value, with no dedicated native node?
+│   └── Only then use an Edit Fields arrow function expression. See references/ARROW_FUNCTIONS_IN_EDIT_FIELDS.md
 │
 ├── Does it need full statements, multiple data sources, or external libs?
 │   ├── Are you SURE the above two don't work?
@@ -82,7 +86,7 @@ Edit Fields assigns field values via expression. Inline arrow functions get you 
 })() }}
 ```
 
-Right tool for "logic slightly too gnarly for a one-liner." See `references/ARROW_FUNCTIONS_IN_EDIT_FIELDS.md` for patterns and formatting.
+Right tool for **one-item field shaping** that is too involved for a simple expression. Not a substitute for native IF/Filter/Merge/Aggregate nodes that make workflow control flow visible. See `references/ARROW_FUNCTIONS_IN_EDIT_FIELDS.md` for patterns and formatting.
 
 ## When the Code node IS the right answer
 
