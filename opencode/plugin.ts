@@ -15,12 +15,22 @@
 //
 // Requires bash and jq on the system (the hook scripts use them).
 
-import type { Plugin as PluginV1 } from "@opencode-ai/plugin"
-import type { Plugin as PluginV2 } from "@opencode/plugin"
-import { readFileSync, existsSync, statSync, readdirSync, rmSync, type Dirent } from "fs"
-import { join, dirname } from "path"
-import { fileURLToPath } from "url"
-import { spawnSync } from "child_process"
+import type { Plugin as PluginV1 } from "@opencode-ai/plugin";
+import type { Plugin as PluginV2 } from "@opencode/plugin";
+import {
+  accessSync,
+  constants,
+  readFileSync,
+  existsSync,
+  statSync,
+  lstatSync,
+  readdirSync,
+  rmSync,
+  type Dirent,
+} from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 
 // Resolve this file's directory portably. OpenCode loads plugins under different
 // runtimes: the CLI on Bun, the desktop app on Node (Electron). Bun exposes
@@ -29,67 +39,81 @@ import { spawnSync } from "child_process"
 // which is standard in both. Both runtimes resolve the module URL through the
 // ~/.config/opencode/plugins symlink to this file's real location, so REPO_ROOT
 // points at the actual repo checkout, not the symlink directory.
-const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url))
-const REPO_ROOT = join(PLUGIN_DIR, "..")
-const HOOKS_DIR = join(REPO_ROOT, "hooks")
-const SKILLS_DIR = join(REPO_ROOT, "skills")
-const META_SKILL_PATH = join(SKILLS_DIR, "using-n8n-skills-official", "SKILL.md")
+const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = join(PLUGIN_DIR, "..");
+const HOOKS_DIR = join(REPO_ROOT, "hooks");
+const SKILLS_DIR = join(REPO_ROOT, "skills");
+const META_SKILL_PATH = join(
+  SKILLS_DIR,
+  "using-n8n-skills-official",
+  "SKILL.md",
+);
 
-// Must match STATE_DIR in hooks/pre-tool-use/_emit.sh and hooks/session-start.sh
-const STATE_DIR = join(process.env.TMPDIR ?? "/tmp", "n8n-skills-state")
+// Must match STATE_DIR in hooks/pre-tool-use/_emit.sh and hooks/session-start.sh.
+// `||` mirrors bash's `${TMPDIR:-/tmp}`: an empty TMPDIR means "use the default"
+// rather than a relative path.
+const STATE_DIR = join(process.env.TMPDIR || "/tmp", "n8n-skills-state");
 
 // Stable across versions: V2 scopes plugin storage and diagnostics by this ID.
-const PLUGIN_ID = "n8n-skills"
+const PLUGIN_ID = "n8n-skills";
 
 // Everything below fails silently by design, so a broken install (unexpected
 // repo layout) would otherwise be undiagnosable.
 if (!existsSync(HOOKS_DIR) || !existsSync(META_SKILL_PATH)) {
-  console.warn(`[n8n-skills] hooks/ or skills/ not found under ${REPO_ROOT}; skills and reminders will not load`)
+  console.warn(
+    `[n8n-skills] hooks/ or skills/ not found under ${REPO_ROOT}; skills and reminders will not load`,
+  );
 }
 
 // Derive tool-suffix -> hook-script tables from hooks/hooks.json (the source
 // of truth for Claude Code and Codex) so new matchers there propagate without
 // touching this file. Matchers are ^mcp__.*__<suffix>$; only the suffix is
 // kept because MCP server names are user-configurable in OpenCode.
-function loadHookTable(event: "PreToolUse" | "PostToolUse"): Array<{ match: string; script: string }> {
+function loadHookTable(
+  event: "PreToolUse" | "PostToolUse",
+): Array<{ match: string; script: string }> {
   try {
-    const config = JSON.parse(readFileSync(join(HOOKS_DIR, "hooks.json"), "utf-8"))
-    const table: Array<{ match: string; script: string }> = []
+    const config = JSON.parse(
+      readFileSync(join(HOOKS_DIR, "hooks.json"), "utf-8"),
+    );
+    const table: Array<{ match: string; script: string }> = [];
     for (const entry of config.hooks?.[event] ?? []) {
-      const suffix = /^\^mcp__\.\*__(\w+)\$$/.exec(entry.matcher ?? "")?.[1]
-      const script = entry.hooks?.[0]?.command?.split("/hooks/")[1]
-      if (suffix && script) table.push({ match: suffix, script })
+      const suffix = /^\^mcp__\.\*__(\w+)\$$/.exec(entry.matcher ?? "")?.[1];
+      const script = entry.hooks?.[0]?.command?.split("/hooks/")[1];
+      if (suffix && script) table.push({ match: suffix, script });
     }
-    return table
+    return table;
   } catch {
-    return []
+    return [];
   }
 }
 
-const PRE_TOOL_HOOKS = loadHookTable("PreToolUse")
-const POST_TOOL_HOOKS = loadHookTable("PostToolUse")
+const PRE_TOOL_HOOKS = loadHookTable("PreToolUse");
+const POST_TOOL_HOOKS = loadHookTable("PostToolUse");
 if (PRE_TOOL_HOOKS.length === 0) {
-  console.warn("[n8n-skills] no PreToolUse matchers parsed from hooks/hooks.json; tool reminders disabled")
+  console.warn(
+    "[n8n-skills] no PreToolUse matchers parsed from hooks/hooks.json; tool reminders disabled",
+  );
 }
 
 // Cache the meta-skill content with mtime-based invalidation.
 // On git pull, SKILL.md changes on disk; checking mtime ensures the cache
 // is invalidated without requiring an OpenCode restart.
-let metaSkillCache: string | null = null
-let metaSkillMtime = 0
+let metaSkillCache: string | null = null;
+let metaSkillMtime = 0;
 function getMetaSkill(): string | null {
   try {
-    if (!existsSync(META_SKILL_PATH)) return null
-    const mtime = statSync(META_SKILL_PATH).mtimeMs
+    if (!existsSync(META_SKILL_PATH)) return null;
+    const mtime = statSync(META_SKILL_PATH).mtimeMs;
     if (metaSkillCache === null || mtime !== metaSkillMtime) {
-      metaSkillCache = readFileSync(META_SKILL_PATH, "utf-8")
-      metaSkillMtime = mtime
+      metaSkillCache = readFileSync(META_SKILL_PATH, "utf-8");
+      metaSkillMtime = mtime;
     }
-    return metaSkillCache
+    return metaSkillCache;
   } catch {
     // Transient read failure (file locked, permissions, etc.): degrade
     // gracefully without skill injection rather than rejecting the event
-    return null
+    return null;
   }
 }
 
@@ -105,61 +129,91 @@ function getMetaSkill(): string | null {
 // ^mcp__.*__<suffix>$ matcher does, because OpenCode tool names use single
 // underscores (n8n_nccio_validate_workflow) with no unambiguous server/tool split.
 function isN8nTool(toolName: string, suffix: string): boolean {
-  return toolName.toLowerCase().includes("n8n") && toolName.endsWith(suffix)
+  return toolName.toLowerCase().includes("n8n") && toolName.endsWith(suffix);
 }
 
 // Marker string to prevent duplicate injection into system prompt
-const SYSTEM_MARKER = "[n8n-skills: using-n8n-skills-official]"
+const SYSTEM_MARKER = "[n8n-skills: using-n8n-skills-official]";
+
+// Prefer an absolute, root-owned bash so spawnSync does not resolve the
+// interpreter through PATH. The fallback keeps NixOS, Termux, and Git Bash
+// installs working, where bash lives outside /bin and /usr/bin.
+const BASH =
+  ["/bin/bash", "/usr/bin/bash"].find((candidate) => {
+    try {
+      accessSync(candidate, constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }) ?? "bash";
 
 // Run a bash hook script synchronously with JSON stdin and return parsed output
 // Uses spawnSync instead of BunShell ($) for reliability inside OpenCode's plugin context
-function runHook(scriptPath: string, hookInput: string): { hookSpecificOutput?: { additionalContext?: string } } | null {
+function runHook(
+  scriptPath: string,
+  hookInput: string,
+): { hookSpecificOutput?: { additionalContext?: string } } | null {
   try {
-    const result = spawnSync("bash", [scriptPath], {
+    const result = spawnSync(BASH, [scriptPath], {
       input: hookInput,
       encoding: "utf-8",
       timeout: 10000,
-    })
-    if (result.status !== 0 || !result.stdout) return null
-    return JSON.parse(result.stdout)
+    });
+    if (result.status !== 0 || !result.stdout) return null;
+    return JSON.parse(result.stdout);
   } catch {
-    return null
+    return null;
   }
 }
 
-// Run every matching PreToolUse and PostToolUse script and return the text to
-// append to the tool result. V1 and V2 have different result shapes, but the
-// reminder text is identical.
-function collectReminders(toolName: string, sessionID: string, toolInput: unknown): string {
-  let text = ""
+// Run every matching PreToolUse and PostToolUse script and return the text
+// blocks to append to the tool result. V1 and V2 have different result shapes,
+// but the reminder text is identical.
+function collectReminders(
+  toolName: string,
+  sessionID: string,
+  toolInput: unknown,
+): string[] {
+  const text: string[] = [];
   try {
     // PreToolUse reminders: the agent sees the reminder in the tool
     // result and applies it on the next action
     for (const hook of PRE_TOOL_HOOKS) {
-      if (!isN8nTool(toolName, hook.match)) continue
-      const hookInput = JSON.stringify({ session_id: sessionID, tool_input: toolInput })
-      const parsed = runHook(join(HOOKS_DIR, hook.script), hookInput)
+      if (!isN8nTool(toolName, hook.match)) continue;
+      const hookInput = JSON.stringify({
+        session_id: sessionID,
+        tool_input: toolInput,
+      });
+      const parsed = runHook(join(HOOKS_DIR, hook.script), hookInput);
       if (parsed?.hookSpecificOutput?.additionalContext) {
-        text += `\n\n--- n8n skill reminder ---\n${parsed.hookSpecificOutput.additionalContext}`
+        text.push(
+          `\n\n--- n8n skill reminder ---\n${parsed.hookSpecificOutput.additionalContext}`,
+        );
       }
-      break // Only one pre-tool hook matches per tool call
+      break; // Only one pre-tool hook matches per tool call
     }
 
     // PostToolUse analysis: runs after validate_workflow to suggest
     // which skills to load based on the node types detected in the code
     for (const hook of POST_TOOL_HOOKS) {
-      if (!isN8nTool(toolName, hook.match)) continue
-      const hookInput = JSON.stringify({ session_id: sessionID, tool_input: toolInput })
-      const parsed = runHook(join(HOOKS_DIR, hook.script), hookInput)
+      if (!isN8nTool(toolName, hook.match)) continue;
+      const hookInput = JSON.stringify({
+        session_id: sessionID,
+        tool_input: toolInput,
+      });
+      const parsed = runHook(join(HOOKS_DIR, hook.script), hookInput);
       if (parsed?.hookSpecificOutput?.additionalContext) {
-        text += `\n\n--- n8n post-validation analysis ---\n${parsed.hookSpecificOutput.additionalContext}`
+        text.push(
+          `\n\n--- n8n post-validation analysis ---\n${parsed.hookSpecificOutput.additionalContext}`,
+        );
       }
-      break
+      break;
     }
   } catch {
     // Silent failure: never block tool execution if serialization or hooks fail
   }
-  return text
+  return text;
 }
 
 // Clear this session's one-shot markers so tool reminders fire again after
@@ -167,9 +221,12 @@ function collectReminders(toolName: string, sessionID: string, toolInput: unknow
 // agent's memory of the reminders is gone.
 function clearSessionMarkers(sessionID: string): void {
   try {
+    // Never follow a symlinked state dir. rmSync unlinks a symlinked marker
+    // file rather than following it, so marker files themselves stay safe.
+    if (!lstatSync(STATE_DIR).isDirectory()) return;
     for (const f of readdirSync(STATE_DIR)) {
       if (f.startsWith(`${sessionID}-`) && f.endsWith(".loaded")) {
-        rmSync(join(STATE_DIR, f), { force: true })
+        rmSync(join(STATE_DIR, f), { force: true });
       }
     }
   } catch {
@@ -183,9 +240,9 @@ function clearSessionMarkers(sessionID: string): void {
 // See README "MCP tool output shapes".
 function appendToOutput(output: any, text: string): void {
   if (typeof output.output === "string") {
-    output.output += text
+    output.output += text;
   } else if (Array.isArray(output.content)) {
-    output.content.push({ type: "text", text })
+    output.content.push({ type: "text", text });
   }
 }
 
@@ -193,104 +250,132 @@ function appendToOutput(output: any, text: string): void {
 // Content is what the model sees, so prefer it, then fall back to a string
 // output, then create content when the tool returned neither.
 function appendToResult(result: any, text: string): any {
-  if (typeof result.content === "string") return { ...result, content: result.content + text }
-  if (Array.isArray(result.content)) return { ...result, content: [...result.content, { type: "text", text }] }
-  if (typeof result.output === "string") return { ...result, output: result.output + text }
-  return { ...result, content: text }
+  if (typeof result.content === "string")
+    return { ...result, content: result.content + text };
+  if (Array.isArray(result.content))
+    return { ...result, content: [...result.content, { type: "text", text }] };
+  if (typeof result.output === "string")
+    return { ...result, output: result.output + text };
+  return { ...result, content: text };
 }
 
 // V1 config hook equivalent for V2: V2 has no mutable global config, so the
 // bundled skills are added through the skill domain instead of skills.paths.
 // Parse just enough frontmatter for Skill.Info. The bundled skills use
 // single-line scalar values; folded block values are handled for future files.
-function parseFrontmatter(source: string): { attributes: Record<string, string>; body: string } {
-  const match = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/.exec(source)
-  if (!match) return { attributes: {}, body: source }
+function parseFrontmatter(source: string): {
+  attributes: Record<string, string>;
+  body: string;
+} {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/.exec(
+    source,
+  );
+  if (!match) return { attributes: {}, body: source };
 
-  const attributes: Record<string, string> = {}
-  let key: string | undefined
-  let lines: string[] = []
+  const attributes: Record<string, string> = {};
+  let key: string | undefined;
+  let lines: string[] = [];
   const flush = () => {
-    if (key === undefined) return
-    const value = parseScalar(lines)
-    if (value !== undefined) attributes[key] = value
-    key = undefined
-    lines = []
-  }
+    if (key === undefined) return;
+    const value = parseScalar(lines);
+    if (value !== undefined) attributes[key] = value;
+    key = undefined;
+    lines = [];
+  };
 
   for (const line of match[1].split(/\r?\n/)) {
-    const pair = /^([A-Za-z0-9_-]+):(?:[ \t]+(.*))?$/.exec(line)
+    // One required whitespace character plus the rest of the line avoids the
+    // overlapping `[ \t]+` and `.*` quantifiers Sonar flagged as super-linear.
+    const pair = /^([A-Za-z0-9_-]+):(?:([ \t][^\n]*))?$/.exec(line);
     if (pair) {
-      flush()
-      key = pair[1]
-      lines = pair[2] === undefined ? [] : [pair[2]]
-      continue
+      flush();
+      key = pair[1];
+      lines = pair[2] === undefined ? [] : [pair[2].replace(/^[ \t]+/, "")];
+      continue;
     }
     if (key !== undefined && (/^[ \t]+/.test(line) || line.trim() === "")) {
-      lines.push(line.trim())
-      continue
+      lines.push(line.trim());
+      continue;
     }
-    flush()
+    flush();
   }
-  flush()
-  return { attributes, body: match[2] }
+  flush();
+  return { attributes, body: match[2] };
 }
 
 function parseScalar(raw: string[]): string | undefined {
-  const lines = raw.slice()
-  while (lines.length > 0 && lines[0] === "") lines.shift()
-  if (lines.length === 0) return ""
-  const first = lines[0].trim()
-  const block = /^[>|][+-]?$/.test(first)
-  const value = block
-    ? lines.slice(1).join(first.startsWith("|") ? "\n" : " ").trim()
-    : lines.join(" ").trim()
-  if (value.startsWith("'") && value.endsWith("'")) return value.slice(1, -1).replace(/''/g, "'")
+  const lines = raw.slice();
+  while (lines.length > 0 && lines[0] === "") lines.shift();
+  if (lines.length === 0) return "";
+  const first = lines[0].trim();
+  const block = /^[>|][+-]?$/.test(first);
+  let value: string;
+  if (block) {
+    const separator = first.startsWith("|") ? "\n" : " ";
+    value = lines.slice(1).join(separator).trim();
+  } else {
+    value = lines.join(" ").trim();
+  }
+  if (value.startsWith("'") && value.endsWith("'"))
+    return value.slice(1, -1).replaceAll("''", "'");
   if (value.startsWith('"') && value.endsWith('"')) {
     try {
-      return JSON.parse(value)
+      return JSON.parse(value);
     } catch {
-      return value.slice(1, -1)
+      return value.slice(1, -1);
     }
   }
-  return value
+  return value;
 }
 
 function loadBundledSkills(): Array<{
-  id: string
-  name: string
-  description?: string
-  path: string
-  content: string
+  id: string;
+  name: string;
+  description?: string;
+  path: string;
+  content: string;
 }> {
-  const skills: Array<{ id: string; name: string; description?: string; path: string; content: string }> = []
-  let entries: Dirent[]
+  const skills: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    path: string;
+    content: string;
+  }> = [];
+  let entries: Dirent[];
   try {
-    entries = readdirSync(SKILLS_DIR, { withFileTypes: true })
+    entries = readdirSync(SKILLS_DIR, { withFileTypes: true });
   } catch (error) {
-    console.warn(`[n8n-skills] could not read bundled skills from ${SKILLS_DIR}:`, error)
-    return skills
+    console.warn(
+      `[n8n-skills] could not read bundled skills from ${SKILLS_DIR}:`,
+      error,
+    );
+    return skills;
   }
 
   for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name.startsWith(".")) continue
-    const path = join(SKILLS_DIR, entry.name, "SKILL.md")
-    if (!existsSync(path)) continue
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    const path = join(SKILLS_DIR, entry.name, "SKILL.md");
+    if (!existsSync(path)) continue;
     // Isolate per-skill failures: one unreadable file must not drop the rest.
     try {
-      const { attributes, body } = parseFrontmatter(readFileSync(path, "utf-8"))
+      const { attributes, body } = parseFrontmatter(
+        readFileSync(path, "utf-8"),
+      );
       skills.push({
         id: entry.name,
         name: attributes.name || entry.name,
-        ...(attributes.description ? { description: attributes.description } : {}),
+        ...(attributes.description
+          ? { description: attributes.description }
+          : {}),
         path,
         content: body,
-      })
+      });
     } catch (error) {
-      console.warn(`[n8n-skills] could not read bundled skill ${path}:`, error)
+      console.warn(`[n8n-skills] could not read bundled skill ${path}:`, error);
     }
   }
-  return skills
+  return skills;
 }
 
 // V1 implementation. OpenCode calls this through the default export's server().
@@ -301,10 +386,10 @@ const serverV1: PluginV1 = async () => {
     // git/npm plugin install ("plugin": ["n8n-skills@git+..."]) be the whole
     // setup: REPO_ROOT resolves to the installed package, which carries skills/.
     config: async (config: any) => {
-      config.skills = config.skills || {}
-      config.skills.paths = config.skills.paths || []
+      config.skills = config.skills || {};
+      config.skills.paths = config.skills.paths || [];
       if (!config.skills.paths.includes(SKILLS_DIR)) {
-        config.skills.paths.push(SKILLS_DIR)
+        config.skills.paths.push(SKILLS_DIR);
       }
     },
 
@@ -312,11 +397,11 @@ const serverV1: PluginV1 = async () => {
     // This replaces Claude Code's SessionStart hook: the meta-skill is always
     // in context, so the agent never needs to manually load it
     "experimental.chat.system.transform": async (_input, output) => {
-      const metaSkill = getMetaSkill()
-      if (!metaSkill) return
+      const metaSkill = getMetaSkill();
+      if (!metaSkill) return;
       // Only append once (system array may persist across calls in the same session)
-      if (!output.system.some(s => s.includes(SYSTEM_MARKER))) {
-        output.system.push(`${SYSTEM_MARKER}\n\n${metaSkill}`)
+      if (!output.system.some((s) => s.includes(SYSTEM_MARKER))) {
+        output.system.push(`${SYSTEM_MARKER}\n\n${metaSkill}`);
       }
     },
 
@@ -324,21 +409,26 @@ const serverV1: PluginV1 = async () => {
     // reminders: mirrors hooks/session-start.sh, which wipes this session's
     // markers on compact because the agent's memory of the reminders is gone
     "experimental.session.compacting": async (input, output) => {
-      clearSessionMarkers(input.sessionID)
-      const metaSkill = getMetaSkill()
-      if (!metaSkill) return
-      output.context.push(`## n8n Skills Protocol\n\n${metaSkill}`)
+      clearSessionMarkers(input.sessionID);
+      const metaSkill = getMetaSkill();
+      if (!metaSkill) return;
+      output.context.push(`## n8n Skills Protocol\n\n${metaSkill}`);
     },
 
     // 3. After n8n MCP tools return, append hook reminders to tool output.
     // OpenCode has no way to inject model-visible text before a tool runs, so
     // both PreToolUse reminders and PostToolUse analysis land in the result.
     "tool.execute.after": async (input, output) => {
-      const text = collectReminders(input.tool, input.sessionID, input.args)
-      if (text) appendToOutput(output, text)
+      for (const text of collectReminders(
+        input.tool,
+        input.sessionID,
+        input.args,
+      )) {
+        appendToOutput(output, text);
+      }
     },
-  }
-}
+  };
+};
 
 // V2 implementation. OpenCode reads id and setup() from the default export.
 const setupV2: PluginV2.Plugin["setup"] = async (ctx) => {
@@ -347,44 +437,62 @@ const setupV2: PluginV2.Plugin["setup"] = async (ctx) => {
   // Read the files before registering: transforms are replayed and must stay
   // synchronous and cheap.
   try {
-    const bundledSkills = loadBundledSkills()
+    const bundledSkills = loadBundledSkills();
     await ctx.skill.transform((editor) => {
       for (const skill of bundledSkills) {
-        editor.add(skill as any)
+        editor.add(skill as any);
       }
-    })
+    });
   } catch (error) {
     // Skill registration failure must not disable the meta-skill or reminders.
-    console.warn(`[n8n-skills] could not register bundled skills from ${SKILLS_DIR}:`, error)
+    console.warn(
+      `[n8n-skills] could not register bundled skills from ${SKILLS_DIR}:`,
+      error,
+    );
   }
 
   // 1. Inject meta-skill into the agent loop's system instructions.
   // The context hook runs before each agent model request, including tool
   // continuations. The marker keeps this idempotent if the same array is reused.
   await ctx.session.hook("context", (event) => {
-    const metaSkill = getMetaSkill()
-    if (!metaSkill) return
-    if (!event.system.some((part) => part.type === "text" && part.text.includes(SYSTEM_MARKER))) {
-      event.system.push({ type: "text", text: `${SYSTEM_MARKER}\n\n${metaSkill}` })
+    const metaSkill = getMetaSkill();
+    if (!metaSkill) return;
+    if (
+      !event.system.some(
+        (part) => part.type === "text" && part.text.includes(SYSTEM_MARKER),
+      )
+    ) {
+      event.system.push({
+        type: "text",
+        text: `${SYSTEM_MARKER}\n\n${metaSkill}`,
+      });
     }
-  })
+  });
 
   // 2. Ensure meta-skill survives compaction, and re-arm the one-shot tool
   // reminders. Same behavior as the V1 compacting hook.
   await ctx.session.hook("compaction", (event) => {
-    clearSessionMarkers(event.sessionID)
-    const metaSkill = getMetaSkill()
-    if (!metaSkill) return
-    event.system.push({ type: "text", text: `## n8n Skills Protocol\n\n${metaSkill}` })
-  })
+    clearSessionMarkers(event.sessionID);
+    const metaSkill = getMetaSkill();
+    if (!metaSkill) return;
+    event.system.push({
+      type: "text",
+      text: `## n8n Skills Protocol\n\n${metaSkill}`,
+    });
+  });
 
   // 3. After n8n MCP tools return, append hook reminders to the tool result.
   await ctx.tool.hook("execute.after", (event) => {
-    if (event.status !== "completed") return
-    const text = collectReminders(event.tool, event.sessionID, event.input)
-    if (text) event.result = appendToResult(event.result, text)
-  })
-}
+    if (event.status !== "completed") return;
+    for (const text of collectReminders(
+      event.tool,
+      event.sessionID,
+      event.input,
+    )) {
+      event.result = appendToResult(event.result, text);
+    }
+  });
+};
 
 // One default export for both APIs. V2 ignores server() and reads id + setup();
 // V1 ignores setup() and calls server(). See the migration guide:
@@ -393,4 +501,4 @@ export default {
   id: PLUGIN_ID,
   setup: setupV2,
   server: serverV1,
-}
+};
