@@ -167,9 +167,9 @@ function runHook(
   }
 }
 
-// Run every matching PreToolUse and PostToolUse script and return the text
-// blocks to append to the tool result. V1 and V2 have different result shapes,
-// but the reminder text is identical.
+// Run every matching PreToolUse and PostToolUse script and return the reminder
+// text blocks. Both API versions queue them for the next model request,
+// because Code Mode can discard an inner MCP result.
 function collectReminders(
   toolName: string,
   sessionID: string,
@@ -177,8 +177,8 @@ function collectReminders(
 ): string[] {
   const text: string[] = [];
   try {
-    // PreToolUse reminders: the agent sees the reminder in the tool
-    // result and applies it on the next action
+    // PreToolUse reminders: the agent sees the reminder on the next action
+    // through the next model request
     for (const hook of PRE_TOOL_HOOKS) {
       if (!isN8nTool(toolName, hook.match)) continue;
       const hookInput = JSON.stringify({
@@ -234,29 +234,39 @@ function clearSessionMarkers(sessionID: string): void {
   }
 }
 
-// V1 tool.execute.after gets a mutable output object in one of two shapes.
-// The SDK types say { output: string }, but at runtime MCP tools receive the
-// raw MCP CallToolResult ({ content: [...] }) instead, so duck-type both.
-// See README "MCP tool output shapes".
-function appendToOutput(output: any, text: string): void {
-  if (typeof output.output === "string") {
-    output.output += text;
-  } else if (Array.isArray(output.content)) {
-    output.content.push({ type: "text", text });
+// Reminder delivery for V1 and V2. Code Mode runs nested MCP calls inside
+// JavaScript and returns only the script's value, so a reminder appended to an
+// inner MCP result never reaches the model. Queue reminders per session instead
+// and inject them before the next agent model request. Deduplicate while
+// pending and clear the queue on delivery.
+// JavaScript Set iterates in insertion order, so draining preserves the order
+// reminders were first queued and `values().next()` below is the oldest entry.
+const MAX_PENDING_REMINDERS = 32;
+const pendingReminders = new Map<string, Set<string>>();
+
+function queueReminders(sessionID: string, reminders: string[]): void {
+  if (reminders.length === 0) return;
+  let pending = pendingReminders.get(sessionID);
+  if (!pending) {
+    pending = new Set();
+    pendingReminders.set(sessionID, pending);
+  }
+  for (const reminder of reminders) pending.add(reminder);
+  // A session interrupted before its next model call must not grow without
+  // bound. 32 is far above the handful a normal batch produces, so this only
+  // trims pathological or abandoned queues. Drop the oldest reminders.
+  while (pending.size > MAX_PENDING_REMINDERS) {
+    const oldest = pending.values().next().value;
+    if (oldest === undefined) break;
+    pending.delete(oldest);
   }
 }
 
-// V2 tool.execute.after exposes a Tool.Result: { output?, content?, metadata? }.
-// Content is what the model sees, so prefer it, then fall back to a string
-// output, then create content when the tool returned neither.
-function appendToResult(result: any, text: string): any {
-  if (typeof result.content === "string")
-    return { ...result, content: result.content + text };
-  if (Array.isArray(result.content))
-    return { ...result, content: [...result.content, { type: "text", text }] };
-  if (typeof result.output === "string")
-    return { ...result, output: result.output + text };
-  return { ...result, content: text };
+function drainReminders(sessionID: string): string[] {
+  const pending = pendingReminders.get(sessionID);
+  if (!pending) return [];
+  pendingReminders.delete(sessionID);
+  return [...pending];
 }
 
 // V1 config hook equivalent for V2: V2 has no mutable global config, so the
@@ -396,7 +406,15 @@ const serverV1: PluginV1 = async () => {
     // 1. Inject meta-skill into system prompt on every LLM call
     // This replaces Claude Code's SessionStart hook: the meta-skill is always
     // in context, so the agent never needs to manually load it
-    "experimental.chat.system.transform": async (_input, output) => {
+    "experimental.chat.system.transform": async (input, output) => {
+      // V1 has no context hook, so this is the equivalent delivery point for
+      // queued tool reminders. Skip requests without a session, such as the
+      // agent generator, so their queue survives for the real session.
+      const reminders = input.sessionID ? drainReminders(input.sessionID) : [];
+      if (reminders.length > 0) {
+        output.system.push(reminders.join(""));
+      }
+
       const metaSkill = getMetaSkill();
       if (!metaSkill) return;
       // Only append once (system array may persist across calls in the same session)
@@ -410,22 +428,26 @@ const serverV1: PluginV1 = async () => {
     // markers on compact because the agent's memory of the reminders is gone
     "experimental.session.compacting": async (input, output) => {
       clearSessionMarkers(input.sessionID);
+      // Compaction is also an LLM request and would otherwise drain the queue
+      // into a summary prompt. Put pending reminders in the compaction context
+      // so they survive the summary.
+      const reminders = drainReminders(input.sessionID);
+      if (reminders.length > 0) {
+        output.context.push(reminders.join(""));
+      }
       const metaSkill = getMetaSkill();
       if (!metaSkill) return;
       output.context.push(`## n8n Skills Protocol\n\n${metaSkill}`);
     },
 
-    // 3. After n8n MCP tools return, append hook reminders to tool output.
-    // OpenCode has no way to inject model-visible text before a tool runs, so
-    // both PreToolUse reminders and PostToolUse analysis land in the result.
-    "tool.execute.after": async (input, output) => {
-      for (const text of collectReminders(
-        input.tool,
+    // 3. After n8n MCP tools return, queue hook reminders for the next model
+    // request. Code Mode drops mutations to an inner MCP result, and it may
+    // return only part of that result even without structuredContent.
+    "tool.execute.after": async (input) => {
+      queueReminders(
         input.sessionID,
-        input.args,
-      )) {
-        appendToOutput(output, text);
-      }
+        collectReminders(input.tool, input.sessionID, input.args),
+      );
     },
   };
 };
@@ -455,6 +477,13 @@ const setupV2: PluginV2.Plugin["setup"] = async (ctx) => {
   // The context hook runs before each agent model request, including tool
   // continuations. The marker keeps this idempotent if the same array is reused.
   await ctx.session.hook("context", (event) => {
+    // Reminders collected after a tool call belong in this request, so drain
+    // them first. The queue is empty on requests that did not follow a tool.
+    const reminders = drainReminders(event.sessionID);
+    if (reminders.length > 0) {
+      event.system.push({ type: "text", text: reminders.join("") });
+    }
+
     const metaSkill = getMetaSkill();
     if (!metaSkill) return;
     if (
@@ -481,16 +510,15 @@ const setupV2: PluginV2.Plugin["setup"] = async (ctx) => {
     });
   });
 
-  // 3. After n8n MCP tools return, append hook reminders to the tool result.
+  // 3. After n8n MCP tools return, collect hook reminders for the next model
+  // request. Mutating the tool result is not enough: Code Mode runs nested MCP
+  // calls and returns only the script's value, so the reminder would be lost.
   await ctx.tool.hook("execute.after", (event) => {
     if (event.status !== "completed") return;
-    for (const text of collectReminders(
-      event.tool,
+    queueReminders(
       event.sessionID,
-      event.input,
-    )) {
-      event.result = appendToResult(event.result, text);
-    }
+      collectReminders(event.tool, event.sessionID, event.input),
+    );
   });
 };
 
