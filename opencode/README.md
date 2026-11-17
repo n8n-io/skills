@@ -12,10 +12,10 @@ This plugin bridges the n8n-skills bash hooks into [OpenCode](https://opencode.a
 ## Prerequisites
 
 - An n8n instance with the instance-level MCP server enabled ([setup guide](https://docs.n8n.io/advanced-ai/mcp/accessing-n8n-mcp-server/))
-- OpenCode (plugin event names verified against `@opencode-ai/plugin` 1.4.10 / OpenCode 1.18.15)
+- OpenCode (V1 event names verified against `@opencode-ai/plugin` 1.4.10 / OpenCode 1.18.15; V2 verified against `@opencode/plugin` 2.x / OpenCode 2.3.0)
 - `bash` and `jq` available on the system
 
-Two events used (`experimental.chat.system.transform`, `experimental.session.compacting`) are on OpenCode's experimental plugin surface and may change between versions. If skill injection stops working after an OpenCode upgrade, check these event names against your installed `@opencode-ai/plugin`.
+V1 uses two experimental events (`experimental.chat.system.transform`, `experimental.session.compacting`). V2 uses the typed `context`, `compaction`, and `execute.after` hooks. If skills or reminders stop working after an OpenCode upgrade, check those hook names and package versions.
 
 ## Installation
 
