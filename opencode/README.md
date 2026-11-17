@@ -4,18 +4,18 @@ This plugin bridges the n8n-skills bash hooks into [OpenCode](https://opencode.a
 
 ## What it does
 
-- **Registers the bundled `skills/` directory** with OpenCode via the `config` hook, so the n8n capability skills are discoverable without a manual `skills.paths` entry
+- **Registers the bundled `skills/` directory** with OpenCode via the `config` hook (V1) or the skill transform (V2), so the n8n capability skills are discoverable without a manual `skills.paths` entry
 - **Injects the `using-n8n-skills-official` meta-skill into the system prompt** on every LLM call, so the agent always has the n8n skill protocol in context
 - **Survives compaction**: the meta-skill is injected into compaction context so it persists across context compression
-- **Appends hook reminders to n8n MCP tool results**: after each n8n MCP tool call, the corresponding bash hook script fires and its reminder is appended to the tool output
+- **Queues hook reminders for n8n MCP tool calls**: after each call, the hook reminder is injected into the next model request, including in Code Mode
 
 ## Prerequisites
 
 - An n8n instance with the instance-level MCP server enabled ([setup guide](https://docs.n8n.io/advanced-ai/mcp/accessing-n8n-mcp-server/))
-- OpenCode (plugin event names verified against `@opencode-ai/plugin` 1.4.10 / OpenCode 1.18.15)
+- OpenCode (V1 event names verified against `@opencode-ai/plugin` 1.4.10 / OpenCode 1.18.15; V2 verified against `@opencode/plugin` 2.x / OpenCode 2.3.0)
 - `bash` and `jq` available on the system
 
-Two events used (`experimental.chat.system.transform`, `experimental.session.compacting`) are on OpenCode's experimental plugin surface and may change between versions. If skill injection stops working after an OpenCode upgrade, check these event names against your installed `@opencode-ai/plugin`.
+V1 uses two experimental events (`experimental.chat.system.transform`, `experimental.session.compacting`). V2 uses the typed `context`, `compaction`, and `execute.after` hooks. If skills or reminders stop working after an OpenCode upgrade, check those hook names and package versions.
 
 ## Installation
 
@@ -25,12 +25,14 @@ See the [main README](../README.md#opencode) for install steps. The OpenCode CLI
 
 The plugin is glue code. All actual hook logic (node-specific warnings, antipattern detection, skill routing) stays in the existing `hooks/` bash scripts maintained by the n8n team.
 
-| OpenCode event | n8n hook equivalent | What happens |
-|----------------|---------------------|--------------|
-| `config` | (install-time setup) | Bundled `skills/` dir pushed into `config.skills.paths` so skills are discoverable |
-| `experimental.chat.system.transform` | SessionStart | Meta-skill injected into system prompt on every LLM call |
-| `experimental.session.compacting` | SessionStart (compact) | Meta-skill injected into compaction context |
-| `tool.execute.after` | PreToolUse + PostToolUse | Bash hook scripts fire after n8n MCP tool calls, reminders appended to tool output |
+| OpenCode event                       | n8n hook equivalent      | What happens                                                                                 |
+| ------------------------------------ | ------------------------ | -------------------------------------------------------------------------------------------- |
+| `config`                             | (install-time setup)     | Bundled `skills/` dir pushed into `config.skills.paths` so skills are discoverable           |
+| `experimental.chat.system.transform` | SessionStart             | Meta-skill injected; queued reminders added before the next model request                    |
+| `experimental.session.compacting`    | SessionStart (compact)   | Meta-skill injected; pending reminders carried into the summary                              |
+| `tool.execute.after`                 | PreToolUse + PostToolUse | Bash hook scripts fire after n8n MCP tool calls, reminders queued for the next model request |
+
+V2 uses the equivalent `context`, `compaction`, and `execute.after` hooks.
 
 ### Tool name matching
 
@@ -42,13 +44,18 @@ The plugin derives the tool-name suffixes and their hook scripts from `hooks/hoo
 
 The plugin resolves the repo root from its own file location via `dirname(fileURLToPath(import.meta.url))`, which works on both runtimes OpenCode uses: the CLI (Bun) and the desktop app (Node/Electron). It deliberately avoids Bun's `import.meta.dir`, which is `undefined` under Node and would throw at load, silently disabling the plugin. Both runtimes resolve the module URL through any symlink to the real file, so the root points at the actual install, not the symlink.
 
-### MCP tool output shapes
+### Reminder delivery
 
-OpenCode passes different output object shapes to `tool.execute.after` depending on the tool type: built-in tools get `{ output: string }`, but MCP tools get `{ content: [{type, text}] }` (the raw MCP `CallResult`). The plugin's `appendToOutput()` helper detects which shape is present and appends text accordingly. Without this, `output.output += "..."` silently fails for MCP tools because `output.output` is `undefined`.
+The plugin does not mutate tool results. It queues hook reminders per session and drains them before the next model request:
+
+- V1: `experimental.chat.system.transform` adds them to the system prompt; title-generation requests are skipped. Pending reminders are also carried into compaction context.
+- V2: the `context` hook adds them before the next primary request; title, generation, and compaction requests use other hooks.
+
+Queues are deduplicated and capped at 32 reminders per session and 128 sessions. The static meta-skill is emitted before the reminder tail to preserve prompt-cache prefixes. This queue is required because Code Mode returns only the script value, not inner MCP mutations.
 
 ### Silent failure
 
-All hook calls use `spawnSync` with a 10-second timeout and are wrapped in try/catch. If a hook script fails (missing `jq`, file permissions, timeout, etc.), the tool result passes through unmodified. Hook errors never block tool execution.
+All hook calls use `spawnSync` with a 10-second timeout and are wrapped in try/catch. If a hook script fails (missing `jq`, file permissions, timeout, etc.), no reminder is queued. Hook errors never block tool execution.
 
 ## Updating
 
