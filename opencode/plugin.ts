@@ -135,6 +135,10 @@ function isN8nTool(toolName: string, suffix: string): boolean {
 // Marker string to prevent duplicate injection into system prompt
 const SYSTEM_MARKER = "[n8n-skills: using-n8n-skills-official]";
 
+// Full first line of OpenCode V1's title prompt.
+const V1_TITLE_PROMPT_SNIPPET =
+  "You are a title generator. You output ONLY a thread title. Nothing else.";
+
 // Prefer an absolute, root-owned bash so spawnSync does not resolve the
 // interpreter through PATH. The fallback keeps NixOS, Termux, and Git Bash
 // installs working, where bash lives outside /bin and /usr/bin.
@@ -234,27 +238,29 @@ function clearSessionMarkers(sessionID: string): void {
   }
 }
 
-// Reminder delivery for V1 and V2. Code Mode runs nested MCP calls inside
-// JavaScript and returns only the script's value, so a reminder appended to an
-// inner MCP result never reaches the model. Queue reminders per session instead
-// and inject them before the next agent model request. Deduplicate while
-// pending and clear the queue on delivery.
-// JavaScript Set iterates in insertion order, so draining preserves the order
-// reminders were first queued and `values().next()` below is the oldest entry.
+// Queue reminders per session because Code Mode returns only the script value.
+// Set/Map preserve insertion order, so draining and eviction are FIFO. Caps keep
+// abandoned sessions bounded.
 const MAX_PENDING_REMINDERS = 32;
+const MAX_PENDING_SESSIONS = 128;
 const pendingReminders = new Map<string, Set<string>>();
 
 function queueReminders(sessionID: string, reminders: string[]): void {
   if (reminders.length === 0) return;
   let pending = pendingReminders.get(sessionID);
   if (!pending) {
+    if (pendingReminders.size >= MAX_PENDING_SESSIONS) {
+      const oldestSession = pendingReminders.keys().next().value;
+      if (oldestSession !== undefined) pendingReminders.delete(oldestSession);
+    }
     pending = new Set();
-    pendingReminders.set(sessionID, pending);
+  } else {
+    // Refresh LRU order.
+    pendingReminders.delete(sessionID);
   }
+  pendingReminders.set(sessionID, pending);
   for (const reminder of reminders) pending.add(reminder);
-  // A session interrupted before its next model call must not grow without
-  // bound. 32 is far above the handful a normal batch produces, so this only
-  // trims pathological or abandoned queues. Drop the oldest reminders.
+  // Drop oldest reminders from pathological batches.
   while (pending.size > MAX_PENDING_REMINDERS) {
     const oldest = pending.values().next().value;
     if (oldest === undefined) break;
@@ -407,19 +413,23 @@ const serverV1: PluginV1 = async () => {
     // This replaces Claude Code's SessionStart hook: the meta-skill is always
     // in context, so the agent never needs to manually load it
     "experimental.chat.system.transform": async (input, output) => {
-      // V1 has no context hook, so this is the equivalent delivery point for
-      // queued tool reminders. Skip requests without a session, such as the
-      // agent generator, so their queue survives for the real session.
-      const reminders = input.sessionID ? drainReminders(input.sessionID) : [];
+      // Deliver queued reminders; skip sessionless and title-generation requests.
+      const isTitleRequest = output.system.some((part) =>
+        part.includes(V1_TITLE_PROMPT_SNIPPET),
+      );
+      const reminders =
+        input.sessionID && !isTitleRequest
+          ? drainReminders(input.sessionID)
+          : [];
+
+      // Static first so new reminders only change the prompt tail.
+      const metaSkill = getMetaSkill();
+      // Only append once (system array may persist across calls in the same session)
+      if (metaSkill && !output.system.some((s) => s.includes(SYSTEM_MARKER))) {
+        output.system.push(`${SYSTEM_MARKER}\n\n${metaSkill}`);
+      }
       if (reminders.length > 0) {
         output.system.push(reminders.join(""));
-      }
-
-      const metaSkill = getMetaSkill();
-      if (!metaSkill) return;
-      // Only append once (system array may persist across calls in the same session)
-      if (!output.system.some((s) => s.includes(SYSTEM_MARKER))) {
-        output.system.push(`${SYSTEM_MARKER}\n\n${metaSkill}`);
       }
     },
 
@@ -428,16 +438,15 @@ const serverV1: PluginV1 = async () => {
     // markers on compact because the agent's memory of the reminders is gone
     "experimental.session.compacting": async (input, output) => {
       clearSessionMarkers(input.sessionID);
-      // Compaction is also an LLM request and would otherwise drain the queue
-      // into a summary prompt. Put pending reminders in the compaction context
-      // so they survive the summary.
+      // Keep pending reminders in the summary context, static content first.
       const reminders = drainReminders(input.sessionID);
+      const metaSkill = getMetaSkill();
+      if (metaSkill) {
+        output.context.push(`## n8n Skills Protocol\n\n${metaSkill}`);
+      }
       if (reminders.length > 0) {
         output.context.push(reminders.join(""));
       }
-      const metaSkill = getMetaSkill();
-      if (!metaSkill) return;
-      output.context.push(`## n8n Skills Protocol\n\n${metaSkill}`);
     },
 
     // 3. After n8n MCP tools return, queue hook reminders for the next model
@@ -480,13 +489,11 @@ const setupV2: PluginV2.Plugin["setup"] = async (ctx) => {
     // Reminders collected after a tool call belong in this request, so drain
     // them first. The queue is empty on requests that did not follow a tool.
     const reminders = drainReminders(event.sessionID);
-    if (reminders.length > 0) {
-      event.system.push({ type: "text", text: reminders.join("") });
-    }
 
+    // Static first so new reminders only change the prompt tail.
     const metaSkill = getMetaSkill();
-    if (!metaSkill) return;
     if (
+      metaSkill &&
       !event.system.some(
         (part) => part.type === "text" && part.text.includes(SYSTEM_MARKER),
       )
@@ -496,10 +503,12 @@ const setupV2: PluginV2.Plugin["setup"] = async (ctx) => {
         text: `${SYSTEM_MARKER}\n\n${metaSkill}`,
       });
     }
+    if (reminders.length > 0) {
+      event.system.push({ type: "text", text: reminders.join("") });
+    }
   });
 
-  // 2. Ensure meta-skill survives compaction, and re-arm the one-shot tool
-  // reminders. Same behavior as the V1 compacting hook.
+  // 2. Keep the meta-skill in compaction; leave reminders for the next primary request.
   await ctx.session.hook("compaction", (event) => {
     clearSessionMarkers(event.sessionID);
     const metaSkill = getMetaSkill();
